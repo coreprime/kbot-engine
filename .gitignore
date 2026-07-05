@@ -1,0 +1,4 @@
+node_modules/
+wasm/engine.wasm
+wasm/wasm_exec.js
+LICENSE

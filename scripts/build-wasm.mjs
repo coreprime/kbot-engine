@@ -10,7 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const repoRoot = path.resolve(pkgDir, '..', '..')
+const repoRoot = pkgDir
 const wasmDir = path.join(pkgDir, 'wasm')
 
 mkdirSync(wasmDir, { recursive: true })
