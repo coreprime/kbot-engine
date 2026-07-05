@@ -1,0 +1,67 @@
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@coreprime'
+
+      # kbot is a public Go module, so no auth is needed to fetch it.
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build wasm
+        run: npm run build
+
+      # On a tag push the tag must match the package version exactly; a
+      # workflow_dispatch run skips the guard (manual re-publish).
+      - name: Guard tag == package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag $GITHUB_REF_NAME (=$tag) does not match package.json version $pkg" >&2
+            exit 1
+          fi
+          echo "tag matches package.json version $pkg"
+
+      # Packs the package and asserts the tarball holds exactly the allow-listed
+      # files with no credential-shaped bytes, leaving the extracted tree behind
+      # for the secret scan below.
+      - name: Verify tarball contents
+        run: node scripts/verify-tarball.mjs pack-verify
+
+      - name: Secret-scan the extracted tarball
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: pack-verify/extracted
+          extra_args: --results=verified,unknown
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

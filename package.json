@@ -1,6 +1,6 @@
 {
   "name": "@coreprime/kbot-engine",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Deterministic KBot simulation engine (Go compiled to WebAssembly) with a small ESM loader for browsers and Node.",
   "license": "MIT",
   "type": "module",
@@ -34,11 +34,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/coreprime/kbot.git",
-    "directory": "packages-js/engine"
+    "url": "git+https://github.com/coreprime/kbot-engine.git"
   },
-  "homepage": "https://github.com/coreprime/kbot/tree/main/packages-js/engine",
+  "homepage": "https://github.com/coreprime/kbot-engine#readme",
   "bugs": {
-    "url": "https://github.com/coreprime/kbot/issues"
+    "url": "https://github.com/coreprime/kbot-engine/issues"
   }
 }

@@ -1,0 +1,37 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@coreprime'
+
+      # kbot is a public Go module, so no auth is needed to fetch it.
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build wasm
+        run: npm run build
+
+      - name: Test
+        run: npm test
