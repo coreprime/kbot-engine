@@ -56,10 +56,9 @@ jobs:
         run: node scripts/verify-tarball.mjs pack-verify
 
       - name: Secret-scan the extracted tarball
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: pack-verify/extracted
-          extra_args: --results=verified,unknown
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin
+          trufflehog --no-update filesystem pack-verify/extracted --results=verified,unknown --fail
 
       - name: Publish to GitHub Packages
         run: npm publish
