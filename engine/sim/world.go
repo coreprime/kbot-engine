@@ -445,10 +445,17 @@ type World struct {
 	order   []uint32 // insertion order for deterministic iteration
 	nextID  uint32
 	rng     *rng.MinStd
+	crt     *rng.Crt
 	tick    uint64
 	simMs   int64
 	gravity fixed.Fixed
 	events  []frame.Event
+
+	// Ambient wind (wind.go). minWind/maxWind bound the per-re-roll speed
+	// draw (the OTA/TNT wind range); the live wind* fields are the current
+	// rolled state. A zero range leaves wind permanently calm, so a world
+	// that declares no wind produces no windgenerator income and no drift.
+	wind windState
 
 	// projectiles are the in-flight model weapons (missiles/rockets/bombs) the
 	// world steps each tick. They are render state derived deterministically
@@ -557,6 +564,14 @@ type Config struct {
 	// MonarchDeath is the TA:K MonarchDeath lobby option: with it on, a side
 	// whose monarch dies loses every remaining unit (specials.md §7.3).
 	MonarchDeath bool
+
+	// MinWind / MaxWind bound the ambient wind speed the world re-rolls (the
+	// OTA/TNT minwindspeed/maxwindspeed pair; world.md §1.8). Both zero leaves
+	// the world calm. The re-roll interval is drawn from the CRT stream and the
+	// speed/heading from the shared MINSTD stream, so a configured range makes
+	// windgenerator income and projectile drift live.
+	MinWind int32
+	MaxWind int32
 }
 
 // defaultGravity is the engine default projectile gravity on the sandbox's
@@ -575,6 +590,11 @@ func New(cfg Config) *World {
 	if r == nil {
 		r = rng.NewMinStd(cfg.Seed)
 	}
+	// The CRT stream is seeded deterministically from the same session seed so
+	// lockstep peers draw the wind re-roll interval (and, later, meteor
+	// weather) identically. The originals seed it from wall-clock time, which
+	// the sandbox cannot mirror without breaking lockstep.
+	crt := rng.NewCrt(cfg.Seed)
 	// 0 applies the skirmish default (1000); a negative request means an
 	// exact empty opening stock (so an income source is not masked by the
 	// pool sitting at its storage cap).
@@ -598,12 +618,14 @@ func New(cfg Config) *World {
 		nextProjID:    1,
 		nextFeatureID: featureIDBase,
 		rng:           r,
+		crt:           crt,
 		gravity:       g,
 		spawn:         cfg.Spawn,
 		econModel:     cfg.Economy,
 		startMetal:    sm,
 		startEnergy:   se,
 		monarchDeath:  cfg.MonarchDeath,
+		wind:          windState{minWind: cfg.MinWind, maxWind: cfg.MaxWind},
 	}
 }
 

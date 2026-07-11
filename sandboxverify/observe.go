@@ -67,6 +67,12 @@ func (st *runState) sample(c CheckSpec) (int64, bool, string) {
 		return int64(st.rngNow - st.rngStart), true, ""
 	case "world.stockpile_cap":
 		return int64(st.world.StockpileCap()), true, ""
+	case "world.wind_speed":
+		return int64(st.world.WindSpeed()), true, ""
+	case "world.wind_strength_milli":
+		// The normalized windgenerator strength (speed/5000, clamped 1),
+		// scaled ×1000 so an integer observable reads it to three decimals.
+		return st.world.WindStrengthMilli(), true, ""
 	}
 	if c.Observable == "side.unit_count" {
 		if c.Side == nil {

@@ -171,6 +171,10 @@ func (w *World) Step(rt Runtime) {
 	} else if w.tick%taSettleTicks == 0 {
 		w.settleTA()
 	}
+	// The ambient wind re-roll runs last (the engines' phase 8, after the
+	// player-economy phase): a settle this tick has already read the wind the
+	// previous tick rolled, matching the phase order.
+	w.stepWind()
 }
 
 // stepBuildDecay rolls back every under-construction frame that no builder
@@ -697,6 +701,17 @@ func (w *World) stepProjectiles() {
 			}
 		}
 		p.stepProjectile(fixed.Zero)
+		// Wind drift: the unpowered branches (gravity bombs and ballistic
+		// arcs) accrue the live per-tick wind vector into their position,
+		// exactly as the engines' proj_tick_all adds the wind components after
+		// the pos += vel step (world.md §1.8; substrate.md §1.1). Powered and
+		// guided shots hold their heading and are unaffected.
+		if w.wind.driftX != 0 || w.wind.driftZ != 0 {
+			if p.mode == projBallistic || p.mode == projDropped {
+				p.pos.X = fixed.Wrap32(p.pos.X + w.wind.driftX)
+				p.pos.Z = fixed.Wrap32(p.pos.Z + w.wind.driftZ)
+			}
+		}
 		// A disintegrator (D-gun) sweeps its whole path: on contact with an
 		// enemy body it detonates but keeps flying, so it disintegrates a chain
 		// of units — each detonation's splash catching friendlies too — and a

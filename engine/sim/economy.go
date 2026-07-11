@@ -357,9 +357,11 @@ func (w *World) taUnitIncomeTick(u *Unit, prodE, prodM *float64) {
 				*prodM += float64(int32(ec.MakesMetal))
 			}
 		case ec.WindGenerator > 0:
-			// Wind income needs the live wind scalar; the sandbox carries
-			// no wind system yet (seam: world block), so wind generators
-			// produce nothing rather than inventing a strength.
+			// Wind income = the live normalized wind strength (speed/5000,
+			// clamped to 1) × windgenerator, credited every settle. The wind
+			// re-roll (wind.go) refreshes the strength each tick; a calm world
+			// leaves it zero so the generator produces nothing.
+			*prodE += float64(w.wind.strength) * float64(ec.WindGenerator)
 		case ec.TidalGenerator > 0:
 			// Map tidal strength defaults to 0.5 when the OTA declares
 			// none; the sandbox has no OTA feed, so the default applies.

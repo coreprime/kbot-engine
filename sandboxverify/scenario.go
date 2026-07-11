@@ -48,6 +48,12 @@ type Scenario struct {
 	// cap), so income sources become observable instead of overflowing.
 	StartMetal  int `yaml:"start_metal"`
 	StartEnergy int `yaml:"start_energy"`
+	// MinWind / MaxWind set the ambient wind speed range (the OTA/TNT
+	// minwindspeed/maxwindspeed pair; world.md §1.8). Both omitted (zero)
+	// leaves the world calm. A fixed range (min == max) re-rolls a constant
+	// speed with no MINSTD speed draw.
+	MinWind int `yaml:"min_wind"`
+	MaxWind int `yaml:"max_wind"`
 
 	Terrain *TerrainSpec `yaml:"terrain"`
 	Units   []UnitSpec   `yaml:"units"`

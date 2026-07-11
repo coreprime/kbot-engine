@@ -205,10 +205,10 @@ func (w *World) makeProjectile(ownerID, targetID uint32, slot int, wm WeaponMeta
 		// arc that intercepts the target under this world's gravity. The
 		// launch velocity carries the whole solution — flight is then pure
 		// pos += vel; vy −= g integration. Two engine refinements are
-		// deliberately absent pending resolved constants: the launch droop
-		// pre-compensation term (its per-slot source value is unresolved)
-		// and the wind vector (whose 5-10 s re-roll would also consume
-		// shared-stream draws); both are sub-tick landing-point trims.
+		// absent only in the launch droop pre-compensation term (its
+		// per-slot source value is unresolved) — a sub-tick landing
+		// trim. The per-tick wind vector IS applied in stepProjectiles
+		// (world.md §1.8): a ballistic shell drifts downwind in flight.
 		horiz := fixed.Hypot(dx, dz)
 		if vh, vy, ok := solveBallisticLaunch(
 			horiz.Float(), (anchor.Y - target.Y).Float(),

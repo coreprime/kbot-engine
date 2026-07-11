@@ -31,6 +31,7 @@ func UnitMetaFromFBI(name string, fbi []byte, resolve WeaponResolver) (*sim.Unit
 		return nil, err
 	}
 	m := MetaFromUnitInfo(name, &u.Info, resolve)
+	applyEnvironIncome(m, fbi)
 	var ku tak.Unit
 	if err := tdf.Unmarshal(fbi, &ku); err == nil {
 		ApplyTAKWeapons(m, &ku)
@@ -38,6 +39,29 @@ func UnitMetaFromFBI(name string, fbi []byte, resolve WeaponResolver) (*sim.Unit
 		applyTAKEcon(m, &ku)
 	}
 	return m, nil
+}
+
+// applyEnvironIncome fills the windgenerator/tidalgenerator income fields the
+// kbot-io FBI schema does not surface. They drive the TA environment-income
+// branches (economy.md §1.5): windgenerator scales the live wind strength and
+// tidalgenerator the map tidal constant. Parsed directly from the raw FBI here
+// rather than threaded through the shared schema, which several downstream
+// tools pin at a fixed version.
+func applyEnvironIncome(m *sim.UnitMeta, fbi []byte) {
+	if m == nil {
+		return
+	}
+	var env struct {
+		Info struct {
+			WindGenerator  float64 `tdf:"windgenerator,omitempty"`
+			TidalGenerator float64 `tdf:"tidalgenerator,omitempty"`
+		} `tdf:"unitinfo"`
+	}
+	if err := tdf.Unmarshal(fbi, &env); err != nil {
+		return
+	}
+	m.Econ.WindGenerator = float32(env.Info.WindGenerator)
+	m.Econ.TidalGenerator = float32(env.Info.TidalGenerator)
 }
 
 // applyTAKEcon fills the TA:K half of the economy stat block from the unit's
@@ -289,9 +313,9 @@ func applyTAEcon(m *sim.UnitMeta, info *ta.UnitInfo) {
 	e.EnergyUse = float32(info.EnergyUse)
 	e.ExtractsMetal = float32(info.ExtractsMetal)
 	e.MakesMetal = float32(info.MakesMetal)
-	// windgenerator/tidalgenerator are not surfaced by the FBI parser; the
-	// world's wind system is a later block and tidal defaults apply, so the
-	// EconMeta wind/tidal fields stay zero (no scenario exercises them).
+	// windgenerator/tidalgenerator are not in the shared FBI schema; they are
+	// parsed straight from the raw file by applyEnvironIncome (called from
+	// UnitMetaFromFBI) so the environment-income branches stay data-driven.
 	e.EnergyStorage = float32(info.EnergyStorage)
 	e.MetalStorage = float32(info.MetalStorage)
 	e.BuildTime = int32(info.BuildTime)

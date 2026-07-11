@@ -1,0 +1,56 @@
+# TA wind generator income: the ambient wind re-rolls a speed each interval,
+# normalizes it to a [0,1] strength (speed/5000, clamped), and a windgenerator
+# credits strength * windgenerator energy every settle. A fixed wind range
+# (min == max) pins the speed with no MINSTD speed draw, so the strength — and
+# thus the income — is exactly derivable.
+# Ground truth: world.md §1.8 (wind producer / strength), economy.md §1.5
+# branch 3 (windgenerator income).
+name: ta-econ-wind-income
+game: ta
+system: economy
+spec: world.md §1.8, economy.md §1.5
+description: >-
+  A lone ARMWIN (WindGenerator=30, ActivateWhenBuilt, no energy demand) on a
+  world whose wind range is pinned to 2500. Strength = 2500/5000 = 0.5, so the
+  generator credits 0.5 * 30 = 15 energy per settle. The side opens with an
+  empty energy pool (below the max(start,200)=200 cap) so ten settles of income
+  accumulate visibly instead of clamping.
+seed: 1
+duration: 310
+start_energy: -1
+min_wind: 2500
+max_wind: 2500
+units:
+  - alias: gen
+    type: armwin
+    side: 0
+    pos: [200, 200]
+    heading: 0
+checks:
+  - at: 305
+    observable: world.wind_speed
+    expect: 2500
+    label: pinned wind speed
+    derivation: |
+      The wind re-roll draws speed = minWind + MINSTD(maxWind - minWind).
+      With minWind == maxWind == 2500 the bound is 0, so MINSTD draws nothing
+      and speed is exactly minWind = 2500 on every re-roll.
+  - at: 305
+    observable: world.wind_strength_milli
+    expect: 500
+    label: normalized wind strength (x1000)
+    derivation: |
+      strength = min(speed/5000, 1) = min(2500/5000, 1) = 0.5. The observable
+      scales by 1000 -> 500.
+  - at: 305
+    side: 0
+    observable: side.energy
+    expect: 9830400
+    label: windgenerator income over ten settles
+    derivation: |
+      Income per settle = f32(strength * windgenerator) = 0.5 * 30 = 15 energy,
+      exact in float32. The first re-roll lands on frame 1 (strength 0.5 by the
+      first settle); settles land on frames 30, 60, ..., 300 = ten credits into
+      the empty opening pool: 10 * 15 = 150 energy, below the 200 cap. Raw
+      trunc(150 * 65536) = 9830400.
+    missing_if_zero: true

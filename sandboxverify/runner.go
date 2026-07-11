@@ -223,6 +223,7 @@ func buildWorld(sc *Scenario, root string) (*runState, error) {
 	w := sim.New(sim.Config{
 		Seed: sc.Seed, Spawn: spawn, Rand: rt.Rand(), Economy: econ,
 		StartMetal: startM, StartEnergy: startE,
+		MinWind: int32(sc.MinWind), MaxWind: int32(sc.MaxWind),
 	})
 	if t := makeTerrain(sc.Terrain); t != nil {
 		w.SetTerrain(t)
