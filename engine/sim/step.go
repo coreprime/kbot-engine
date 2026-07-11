@@ -241,6 +241,16 @@ func (w *World) stepBuildDecay() {
 func (w *World) stepBuilder(u *Unit) {
 	switch u.buildState {
 	case buildIdle:
+		// Keep shooing squatters off an idle factory's yard. buggerOff only ran
+		// while the factory was actively producing, so the LAST unit off a run —
+		// whose rolloff stalled at the doors with no successor to trigger a
+		// follow-up shoo — could sit on the pad forever (the intermittent
+		// "finished unit never leaves the factory"). Running it here re-issues
+		// the rolloff every scan until the plot is clear, and unwedges a fresh
+		// queue whose pad is still occupied.
+		if !u.Meta.CanMove && hasYard(u) {
+			w.buggerOff(u)
+		}
 		// Factory with work queued: take the head onto the pad. With an
 		// Activate script the doors animate open first — the pad raise
 		// waits for YARD_OPEN (or the grace deadline). A unit sitting in the
