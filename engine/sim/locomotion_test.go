@@ -3,7 +3,7 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/fixed"
 )
 
 // TestAimPullIn pins the waypoint corner-cutting rule (locomotion spec §1.2):

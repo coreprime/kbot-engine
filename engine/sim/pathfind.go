@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Grid pathfinding over the terrain cell grid. Local avoidance (collision.go)
 // steers a unit around the dynamic units in front of it, but it cannot solve

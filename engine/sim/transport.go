@@ -1,8 +1,8 @@
 package sim
 
 import (
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
 )
 
 // Transports. A unit whose FBI declares transport capacity (the Atlas's

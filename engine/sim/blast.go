@@ -1,8 +1,8 @@
 package sim
 
 import (
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
 )
 
 // Death blasts and self-destruct.

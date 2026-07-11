@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Unit-vs-unit collision and local avoidance. Two cooperating passes keep
 // surface units from driving through each other:

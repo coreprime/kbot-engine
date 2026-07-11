@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
-	"github.com/coreprime/kbot/engine/script"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
+	"github.com/coreprime/kbot-engine/engine/script"
 )
 
 // TestMobileBuilderSequentialStructures drives the real ARM construction kbot

@@ -3,8 +3,8 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
 )
 
 // blastMeta arms a unit with explicit death blasts: a modest explodeas and a

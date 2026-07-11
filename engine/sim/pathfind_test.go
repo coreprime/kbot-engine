@@ -3,8 +3,8 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
 )
 
 // TestPathAroundWall pins global pathfinding over terrain: a wall of

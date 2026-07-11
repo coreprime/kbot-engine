@@ -3,7 +3,7 @@ package games
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/formats/gamedata/ta"
+	"github.com/coreprime/kbot-io/formats/gamedata/ta"
 )
 
 // TestMetaDerivesResourceSiteFlags pins the FBI-driven placement flags the

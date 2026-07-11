@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/coreprime/kbot/formats/gamedata/common"
-	"github.com/coreprime/kbot/formats/gamedata/ta"
-	"github.com/coreprime/kbot/formats/gamedata/tak"
-	"github.com/coreprime/kbot/formats/tdf"
+	"github.com/coreprime/kbot-io/formats/gamedata/common"
+	"github.com/coreprime/kbot-io/formats/gamedata/ta"
+	"github.com/coreprime/kbot-io/formats/gamedata/tak"
+	"github.com/coreprime/kbot-io/formats/tdf"
 )
 
 // Build-option resolution.

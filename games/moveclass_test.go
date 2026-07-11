@@ -3,7 +3,7 @@ package games
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/sim"
+	"github.com/coreprime/kbot-engine/engine/sim"
 )
 
 // moveclassTDF exercises the three class shapes that matter: a tank class

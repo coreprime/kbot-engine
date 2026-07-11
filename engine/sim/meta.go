@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // UnitMeta is the FBI-derived stat block a unit type carries into the
 // simulation. Floats from the parsed FBI are converted to fixed-point exactly

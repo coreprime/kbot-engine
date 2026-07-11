@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
-	"github.com/coreprime/kbot/engine/script"
-	"github.com/coreprime/kbot/engine/sim"
-	"github.com/coreprime/kbot/formats/gamedata/ta"
-	"github.com/coreprime/kbot/formats/scripting"
-	"github.com/coreprime/kbot/games"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
+	"github.com/coreprime/kbot-engine/engine/script"
+	"github.com/coreprime/kbot-engine/engine/sim"
+	"github.com/coreprime/kbot-engine/games"
+	"github.com/coreprime/kbot-io/formats/gamedata/ta"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // loadTAKUnit builds a (meta, binding) pair for a retail TA:K unit exactly

@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // atkPhase enumerates the phases an aircraft cycles through while engaging.
 // A gunship alternates approach/strafe; a fixed-wing aircraft alternates

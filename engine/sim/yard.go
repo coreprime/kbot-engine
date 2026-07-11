@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Yardmap-based structure collision. A standing structure occupies the
 // rectangle of its FBI footprint (8-wu map squares), refined by its YardMap:

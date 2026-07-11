@@ -9,7 +9,7 @@
 // stream. Only the higher-level wire messages cross the wire.
 package frame
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // PieceState is one 3DO piece's local transform, the output of the COB script
 // binding. The renderer applies it on top of the piece's rest pose.

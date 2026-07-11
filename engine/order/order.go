@@ -5,7 +5,7 @@
 // order at the identical tick, so they stay in lockstep.
 package order
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Kind enumerates the order variants. Stored as an explicit value so orders
 // serialize as plain data rather than a Go interface.

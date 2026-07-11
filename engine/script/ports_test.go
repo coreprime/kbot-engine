@@ -3,7 +3,7 @@ package script
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // portProg reads one unit-value port into static[0]: PUSH <port> /

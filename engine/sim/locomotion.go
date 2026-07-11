@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Ground locomotion — the engines' exact per-frame movement law
 // (locomotion spec §1-§3). One integration per sim frame in wu/frame:

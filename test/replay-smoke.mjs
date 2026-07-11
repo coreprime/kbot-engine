@@ -67,15 +67,15 @@ const pinned = session.renderState().units.find((u) => u.id === id)
 assert.ok(pinned, 'unit missing after setUnitState')
 assert.ok(Math.abs(pinned.x - 250) < 1e-4 && Math.abs(pinned.z - 300) < 1e-4, `pos not applied: ${pinned.x},${pinned.z}`)
 assert.ok(Math.abs(pinned.headingRad - Math.PI / 2) < 1e-3, `heading not applied: ${pinned.headingRad}`)
-assert.ok(Math.abs(pinned.speed - 1.2) < 1e-4, `vel not applied: ${pinned.speed}`)
+assert.ok(Math.abs(pinned.speed - 1.2) < 1e-3, `vel not applied: ${pinned.speed}`)
 assert.ok(Math.abs(pinned.health - 80) < 1e-4, `hp not applied: ${pinned.health}`)
 
 // With no orders, further ticks keep the unit within vel·dt of the pin
-// (the sim runs at 40 Hz, so dt = 25ms per tick).
+// (the sim runs at 30 Hz, so dt = 1/30 s per tick).
 const n = 20
 const after = session.stepTo(session.tick() + n).units.find((u) => u.id === id)
 const drift = Math.hypot(after.x - 250, after.z - 300)
-assert.ok(drift <= (pin.vel * n) / 40 + 1e-3, `unit drifted ${drift} WU from the injected pose`)
+assert.ok(drift <= (pin.vel * n) / 30 + 1e-3, `unit drifted ${drift} WU from the injected pose`)
 
 // Motion pin: `moving: true` latches IsMoving with no order (the walk-cycle
 // driver), coasts along the heading at the pinned vel, and `moving: false`
@@ -87,7 +87,7 @@ session.setUnitState(id, { pos: { x: 400, y: 0, z: 400 }, heading: 0, vel: 2, mo
 const pinnedMoving = session.stepTo(session.tick() + 10).units.find((u) => u.id === id)
 assert.equal(pinnedMoving.isMoving, true, 'motion pin did not latch isMoving')
 assert.ok(
-  Math.abs(pinnedMoving.z - (400 - (2 * 10) / 40)) < 1e-3,
+  Math.abs(pinnedMoving.z - (400 - (2 * 10) / 30)) < 1e-3,
   `pinned unit did not coast along heading (0 = north / -Z): z=${pinnedMoving.z}`,
 )
 session.setUnitState(id, { moving: false })

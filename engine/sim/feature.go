@@ -1,8 +1,8 @@
 package sim
 
 import (
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
 )
 
 // Features and wreckage as first-class sim state (world.md §1.5 / §2.5).

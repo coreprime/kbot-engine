@@ -5,12 +5,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
-	"github.com/coreprime/kbot/engine/order"
-	"github.com/coreprime/kbot/engine/script"
-	"github.com/coreprime/kbot/formats/scripting"
-	"github.com/coreprime/kbot/internal/testutil"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/order"
+	"github.com/coreprime/kbot-engine/engine/script"
+	"github.com/coreprime/kbot-io/formats/scripting"
+	"github.com/coreprime/kbot-io/testutil"
 )
 
 // loadTAKBinding parses a retail TA:K v6 COB into a live script unit.

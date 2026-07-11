@@ -3,7 +3,7 @@ package script
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // debugProg builds a four-instruction script that writes static[0] twice, with a

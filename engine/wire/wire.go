@@ -8,9 +8,9 @@ package wire
 import (
 	"encoding/json"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
-	"github.com/coreprime/kbot/engine/order"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/order"
 )
 
 // MsgType tags a message so the receiver knows which payload field is set.

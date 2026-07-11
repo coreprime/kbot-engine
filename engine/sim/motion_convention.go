@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Motion conventions — the per-engine dialect of the shared movement
 // skeleton, resolved per unit from what its COB exports, the same data-driven

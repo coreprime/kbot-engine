@@ -25,7 +25,7 @@ package sim
 import (
 	"math"
 
-	"github.com/coreprime/kbot/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/fixed"
 )
 
 // EconomyModel selects which game's economy law a world runs.

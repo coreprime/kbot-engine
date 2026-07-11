@@ -5,7 +5,7 @@
 // interface here lets engine/sim and engine/session stay free of any I/O.
 package assets
 
-import "github.com/coreprime/kbot/engine/sim"
+import "github.com/coreprime/kbot-engine/engine/sim"
 
 // Provider resolves a unit type name into its simulation metadata and an
 // optional script binding. Implementations live outside the engine core so

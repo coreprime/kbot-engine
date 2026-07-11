@@ -3,7 +3,7 @@ package script
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // idleProg defines two named entry points that each spin forever so a started

@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Line-of-sight, fog-of-war and radar — the per-side vision layer that gates
 // autonomous target acquisition. Modelled from the TA engine's grid-based

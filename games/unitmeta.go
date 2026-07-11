@@ -11,11 +11,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/sim"
-	"github.com/coreprime/kbot/formats/gamedata/ta"
-	"github.com/coreprime/kbot/formats/gamedata/tak"
-	"github.com/coreprime/kbot/formats/tdf"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/sim"
+	"github.com/coreprime/kbot-io/formats/gamedata/ta"
+	"github.com/coreprime/kbot-io/formats/gamedata/tak"
+	"github.com/coreprime/kbot-io/formats/tdf"
 )
 
 // WeaponResolver maps an FBI weapon reference (Weapon1/2/3) to its parsed

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
-	"github.com/coreprime/kbot/engine/script"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/script"
 )
 
 // pieceIndexOf resolves a COB piece-table name to its index, the mapping a

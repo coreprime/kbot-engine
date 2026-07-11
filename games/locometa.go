@@ -3,10 +3,10 @@
 package games
 
 import (
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/sim"
-	"github.com/coreprime/kbot/formats/gamedata/ta"
-	"github.com/coreprime/kbot/formats/gamedata/tak"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/sim"
+	"github.com/coreprime/kbot-io/formats/gamedata/ta"
+	"github.com/coreprime/kbot-io/formats/gamedata/tak"
 )
 
 // applyLocoInfo copies the shared locomotion FBI fields onto the stat block:

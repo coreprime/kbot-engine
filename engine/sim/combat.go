@@ -3,7 +3,7 @@ package sim
 import (
 	"math"
 
-	"github.com/coreprime/kbot/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/fixed"
 )
 
 // Combat damage resolution — the shared detonation math both engines run when

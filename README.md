@@ -1,8 +1,10 @@
 # KBot engine
 
-The deterministic KBot simulation engine — the Go sim core from
-[coreprime/kbot](https://github.com/coreprime/kbot) compiled to WebAssembly —
-packaged with a small ESM loader for browsers and Node.
+The deterministic KBot simulation engine — the Go sim core (`engine/…`) and the
+shared games meta bridge (`games`), building on the
+[coreprime/kbot-io](https://github.com/coreprime/kbot-io) format library and
+compiled to WebAssembly — packaged with a small ESM loader for browsers and
+Node.
 
 The engine owns game state, orders, movement, combat and the COB script VM.
 It emits per-tick render snapshots (unit poses + packed piece transforms +

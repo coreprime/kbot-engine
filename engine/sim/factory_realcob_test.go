@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
-	"github.com/coreprime/kbot/engine/script"
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
+	"github.com/coreprime/kbot-engine/engine/script"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 func loadCobUnit(t *testing.T, rt *script.Runtime, file string) *script.Unit {

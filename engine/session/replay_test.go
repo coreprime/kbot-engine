@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
-	"github.com/coreprime/kbot/engine/sim"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
+	"github.com/coreprime/kbot-engine/engine/sim"
 )
 
 // replayGoldenHash is the world hash a fixed seed + fixed order script must

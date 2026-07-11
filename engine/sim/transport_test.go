@@ -3,8 +3,8 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
 )
 
 // transportMeta builds an air-transport stat block (Atlas-shaped when slots

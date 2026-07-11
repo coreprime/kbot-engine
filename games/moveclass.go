@@ -11,8 +11,8 @@ package games
 import (
 	"strings"
 
-	"github.com/coreprime/kbot/engine/sim"
-	"github.com/coreprime/kbot/formats/tdf"
+	"github.com/coreprime/kbot-engine/engine/sim"
+	"github.com/coreprime/kbot-io/formats/tdf"
 )
 
 // moveClassRec parses one [CLASSn] record with pointer fields so an omitted

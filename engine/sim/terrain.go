@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // Terrain is the map's height field, sampled by the simulation for unit
 // elevation, movement legality (slope and water-depth limits), build-site

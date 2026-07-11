@@ -3,8 +3,8 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
 )
 
 // sightMeta is a testMeta with the vision figures set, so the world's fog

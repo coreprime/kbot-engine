@@ -3,7 +3,7 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/fixed"
 )
 
 // dgunMeta builds the ARM disintegrator's shipped stat block: a slow flying

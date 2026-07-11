@@ -3,9 +3,9 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
-	"github.com/coreprime/kbot/engine/order"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/order"
 )
 
 // testTerrain builds a W×H height field from a fill function, at the TNT

@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // UnitStateOverride is an authoritative single-unit state write, the hook a
 // replay driver uses to pin a unit to decoded wire truth each tick. Each field

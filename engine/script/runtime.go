@@ -3,9 +3,9 @@ package script
 import (
 	"strings"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
-	"github.com/coreprime/kbot/engine/rng"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/rng"
 )
 
 // stepMs is one nominal sim tick in milliseconds (30 Hz, truncated); used

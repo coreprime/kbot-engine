@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/script"
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/script"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 func loadSolar(t *testing.T, rt *script.Runtime) *script.Unit {

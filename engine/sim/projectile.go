@@ -1,6 +1,6 @@
 package sim
 
-import "github.com/coreprime/kbot/engine/fixed"
+import "github.com/coreprime/kbot-engine/engine/fixed"
 
 // This file is the per-tick flight simulation for weapons that carry a 3DO
 // model — the missiles, rockets and bombs whose projectile is a real mesh.

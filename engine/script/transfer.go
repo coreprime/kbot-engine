@@ -1,8 +1,8 @@
 package script
 
 import (
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
 )
 
 // ExportCob captures the unit's full live VM state — statics, active animators,

@@ -1,8 +1,8 @@
 package sim
 
 import (
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
 )
 
 // Snapshot builds the render snapshot for the current tick and drains the

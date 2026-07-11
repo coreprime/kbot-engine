@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // TestProgramCarriesTAKSoundTable proves a retail TA:K v6 COB's sound-name

@@ -9,7 +9,7 @@ package sim
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/fixed"
 )
 
 // pinMoving builds the override a replay driver sends for a unit the wire

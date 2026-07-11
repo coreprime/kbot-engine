@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/script"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/script"
 )
 
 // pieceIndex resolves a piece name in a unit's COB piece table, failing the

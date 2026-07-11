@@ -16,7 +16,7 @@ import (
 	"image/color"
 	"sort"
 
-	"github.com/coreprime/kbot/formats/gaf"
+	"github.com/coreprime/kbot-io/formats/gaf"
 )
 
 // VFS is the read surface an Adapter resolves game data against — the mounted

@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // Instruction is one decoded COB instruction in VM-ready form: the 32-bit

@@ -3,8 +3,8 @@ package script
 import (
 	"testing"
 
-	"github.com/coreprime/kbot/engine/sim"
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-engine/engine/sim"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // The VM must plug into the world through sim's structural interfaces without

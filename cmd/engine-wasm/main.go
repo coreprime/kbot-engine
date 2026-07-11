@@ -17,12 +17,12 @@ import (
 	"bytes"
 	"syscall/js"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/order"
-	"github.com/coreprime/kbot/engine/script"
-	"github.com/coreprime/kbot/engine/session"
-	"github.com/coreprime/kbot/engine/sim"
-	"github.com/coreprime/kbot/formats/scripting"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/order"
+	"github.com/coreprime/kbot-engine/engine/script"
+	"github.com/coreprime/kbot-engine/engine/session"
+	"github.com/coreprime/kbot-engine/engine/sim"
+	"github.com/coreprime/kbot-io/formats/scripting"
 )
 
 // instance pairs a session with the optional JS unit-meta resolver used when a
@@ -45,38 +45,38 @@ var (
 
 func main() {
 	api := map[string]any{
-		"create":       js.FuncOf(create),
-		"destroy":      js.FuncOf(destroy),
-		"addUnit":      js.FuncOf(addUnit),
-		"removeUnit":   js.FuncOf(removeUnit),
-		"submitMove":   js.FuncOf(submitMove),
-		"submitAttack": js.FuncOf(submitAttack),
-		"submitFire":   js.FuncOf(submitFire),
-		"submitStop":   js.FuncOf(submitStop),
-		"submitBuild":  js.FuncOf(submitBuild),
-		"canBuildAt":   js.FuncOf(queryCanBuildAt),
-		"submitPatrol": js.FuncOf(submitPatrol),
-		"submitStance": js.FuncOf(submitStance),
+		"create":             js.FuncOf(create),
+		"destroy":            js.FuncOf(destroy),
+		"addUnit":            js.FuncOf(addUnit),
+		"removeUnit":         js.FuncOf(removeUnit),
+		"submitMove":         js.FuncOf(submitMove),
+		"submitAttack":       js.FuncOf(submitAttack),
+		"submitFire":         js.FuncOf(submitFire),
+		"submitStop":         js.FuncOf(submitStop),
+		"submitBuild":        js.FuncOf(submitBuild),
+		"canBuildAt":         js.FuncOf(queryCanBuildAt),
+		"submitPatrol":       js.FuncOf(submitPatrol),
+		"submitStance":       js.FuncOf(submitStance),
 		"submitSelfDestruct": js.FuncOf(submitSelfDestruct),
-		"submitLoad":   js.FuncOf(submitLoad),
-		"submitRepair": js.FuncOf(submitRepair),
-		"submitUnload": js.FuncOf(submitUnload),
-		"setTerrain":   js.FuncOf(setTerrain),
-		"scheduleAt":   js.FuncOf(scheduleAt),
-		"restore":      js.FuncOf(restore),
-		"step":         js.FuncOf(step),
-		"stepTo":       js.FuncOf(stepTo),
-		"stepPacked":        js.FuncOf(stepPacked),
-		"stepToPacked":      js.FuncOf(stepToPacked),
-		"renderStatePacked": js.FuncOf(renderStatePacked),
-		"setUnitState":   js.FuncOf(setUnitState),
-		"playWeaponFire": js.FuncOf(playWeaponFire),
-		"setUnitActivation": js.FuncOf(setUnitActivation),
-		"renderState":    js.FuncOf(renderState),
-		"hash":           js.FuncOf(hashOf),
-		"tick":           js.FuncOf(tickOf),
-		"cobState":       js.FuncOf(cobState),
-		"exportSnapshot": js.FuncOf(exportSnapshot),
+		"submitLoad":         js.FuncOf(submitLoad),
+		"submitRepair":       js.FuncOf(submitRepair),
+		"submitUnload":       js.FuncOf(submitUnload),
+		"setTerrain":         js.FuncOf(setTerrain),
+		"scheduleAt":         js.FuncOf(scheduleAt),
+		"restore":            js.FuncOf(restore),
+		"step":               js.FuncOf(step),
+		"stepTo":             js.FuncOf(stepTo),
+		"stepPacked":         js.FuncOf(stepPacked),
+		"stepToPacked":       js.FuncOf(stepToPacked),
+		"renderStatePacked":  js.FuncOf(renderStatePacked),
+		"setUnitState":       js.FuncOf(setUnitState),
+		"playWeaponFire":     js.FuncOf(playWeaponFire),
+		"setUnitActivation":  js.FuncOf(setUnitActivation),
+		"renderState":        js.FuncOf(renderState),
+		"hash":               js.FuncOf(hashOf),
+		"tick":               js.FuncOf(tickOf),
+		"cobState":           js.FuncOf(cobState),
+		"exportSnapshot":     js.FuncOf(exportSnapshot),
 		// Developer commands — sandbox-only script control for the Runtime panel.
 		"killAllThreads":  js.FuncOf(killAllThreads),
 		"killUnitThreads": js.FuncOf(killUnitThreads),
@@ -383,12 +383,11 @@ func setTerrain(_ js.Value, args []js.Value) any {
 		return true
 	}
 	t := &sim.Terrain{
-		W:             o.Get("w").Int(),
-		H:             o.Get("h").Int(),
-		CellWU:        fixed.FromFloat(o.Get("cellWU").Float()),
-		HeightScale:   fixed.FromFloat(o.Get("heightScale").Float()),
-		SeaLevel:      o.Get("seaLevel").Int(),
-		SlopeScalePct: o.Get("slopeScalePct").Int(),
+		W:           o.Get("w").Int(),
+		H:           o.Get("h").Int(),
+		CellWU:      fixed.FromFloat(o.Get("cellWU").Float()),
+		HeightScale: fixed.FromFloat(o.Get("heightScale").Float()),
+		SeaLevel:    o.Get("seaLevel").Int(),
 	}
 	data := o.Get("data")
 	n := data.Get("length").Int()

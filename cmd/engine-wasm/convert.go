@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"syscall/js"
 
-	"github.com/coreprime/kbot/engine/fixed"
-	"github.com/coreprime/kbot/engine/frame"
-	"github.com/coreprime/kbot/engine/order"
-	"github.com/coreprime/kbot/engine/sim"
+	"github.com/coreprime/kbot-engine/engine/fixed"
+	"github.com/coreprime/kbot-engine/engine/frame"
+	"github.com/coreprime/kbot-engine/engine/order"
+	"github.com/coreprime/kbot-engine/engine/sim"
 )
 
 // metaFromJS converts a plain JS unit-meta object (the shape the studio's
@@ -20,19 +20,19 @@ import (
 // tick loop only ever sees integers.
 func metaFromJS(o js.Value) *sim.UnitMeta {
 	m := &sim.UnitMeta{
-		Name:        getString(o, "name"),
-		MaxVelocity: fixed.FromFloat(getFloat(o, "maxVelocity")),
-		TurnRate:    fixed.FromFloat(getFloat(o, "turnRate")),
-		Accel:       fixed.FromFloat(getFloat(o, "acceleration")),
-		BrakeRate:   fixed.FromFloat(getFloat(o, "brakeRate")),
-		CanMove:     getBool(o, "canMove"),
-		IsAircraft:  getBool(o, "isAircraft"),
-		IsHover:     getBool(o, "isHover"),
-		IsShip:      getBool(o, "isShip"),
-		IsSub:       getBool(o, "isSub"),
-		IsHovercraft: getBool(o, "isHovercraft"),
-		IsBuilder:   getBool(o, "isBuilder"),
-		OnOffable:   getBool(o, "onoffable"),
+		Name:              getString(o, "name"),
+		MaxVelocity:       fixed.FromFloat(getFloat(o, "maxVelocity")),
+		TurnRate:          fixed.FromFloat(getFloat(o, "turnRate")),
+		Accel:             fixed.FromFloat(getFloat(o, "acceleration")),
+		BrakeRate:         fixed.FromFloat(getFloat(o, "brakeRate")),
+		CanMove:           getBool(o, "canMove"),
+		IsAircraft:        getBool(o, "isAircraft"),
+		IsHover:           getBool(o, "isHover"),
+		IsShip:            getBool(o, "isShip"),
+		IsSub:             getBool(o, "isSub"),
+		IsHovercraft:      getBool(o, "isHovercraft"),
+		IsBuilder:         getBool(o, "isBuilder"),
+		OnOffable:         getBool(o, "onoffable"),
 		ActivateWhenBuilt: getBool(o, "activateWhenBuilt"),
 	}
 	m.BuildTime = fixed.FromFloat(getFloat(o, "buildTime"))
@@ -686,22 +686,22 @@ func snapshotToJS(s frame.Snapshot) js.Value {
 		for i := range s.Resources {
 			r := &s.Resources[i]
 			res = append(res, map[string]any{
-				"side":        r.Side,
-				"metalSpent":  r.MetalSpent.Float(),
-				"energySpent": r.EnergySpent.Float(),
-				"manaSpent":   r.ManaSpent.Float(),
-				"metalRate":   r.MetalRate.Float(),
-				"energyRate":  r.EnergyRate.Float(),
-				"manaRate":    r.ManaRate.Float(),
-				"metalStock":  r.MetalStock.Float(),
-				"energyStock": r.EnergyStock.Float(),
-				"manaStock":   r.ManaStock.Float(),
-				"metalCap":    r.MetalCap.Float(),
-				"energyCap":   r.EnergyCap.Float(),
-				"manaCap":     r.ManaCap.Float(),
-				"metalGen":    r.MetalGen.Float(),
-				"energyGen":   r.EnergyGen.Float(),
-				"manaGen":     r.ManaGen.Float(),
+				"side":           r.Side,
+				"metalSpent":     r.MetalSpent.Float(),
+				"energySpent":    r.EnergySpent.Float(),
+				"manaSpent":      r.ManaSpent.Float(),
+				"metalRate":      r.MetalRate.Float(),
+				"energyRate":     r.EnergyRate.Float(),
+				"manaRate":       r.ManaRate.Float(),
+				"metalStock":     r.MetalStock.Float(),
+				"energyStock":    r.EnergyStock.Float(),
+				"manaStock":      r.ManaStock.Float(),
+				"metalCap":       r.MetalCap.Float(),
+				"energyCap":      r.EnergyCap.Float(),
+				"manaCap":        r.ManaCap.Float(),
+				"metalGen":       r.MetalGen.Float(),
+				"energyGen":      r.EnergyGen.Float(),
+				"manaGen":        r.ManaGen.Float(),
 				"metalProduced":  r.MetalProduced.Float(),
 				"energyProduced": r.EnergyProduced.Float(),
 				"manaProduced":   r.ManaProduced.Float(),
@@ -722,18 +722,20 @@ func snapshotToJS(s frame.Snapshot) js.Value {
 // stay in their js.Value form — they are small and irregular.
 //
 // Layout (little-endian, 4-byte words):
-//   header:  u32 version (=1), u32 tick, u32 unitCount, u32 pieceFloatsTotal
-//   units:   unitCount records × PACKED_UNIT_WORDS (see below)
-//   pieces:  pieceFloatsTotal f32 — every unit's stride-7 piece floats
-//            back to back; each record's pieceOff/pieceCount index into it.
+//
+//	header:  u32 version (=1), u32 tick, u32 unitCount, u32 pieceFloatsTotal
+//	units:   unitCount records × PACKED_UNIT_WORDS (see below)
+//	pieces:  pieceFloatsTotal f32 — every unit's stride-7 piece floats
+//	         back to back; each record's pieceOff/pieceCount index into it.
 //
 // Unit record words (u32 unless noted):
-//   0 id · 1 nameIdx (into the names table) · 2 side(i32) ·
-//   3 flags (1 dead · 2 isMoving · 4 hasMove) ·
-//   4 x · 5 y · 6 z · 7 headingRad · 8 headingWire · 9 speed · 10 health ·
-//   11 buildPercent · 12 moveX · 13 moveZ (all f32) ·
-//   14 moveMode · 15 fireMode · 16 selfDestructMs · 17 carriedBy ·
-//   18 pieceOff (f32 index into the pieces region) · 19 pieceCount (floats)
+//
+//	0 id · 1 nameIdx (into the names table) · 2 side(i32) ·
+//	3 flags (1 dead · 2 isMoving · 4 hasMove) ·
+//	4 x · 5 y · 6 z · 7 headingRad · 8 headingWire · 9 speed · 10 health ·
+//	11 buildPercent · 12 moveX · 13 moveZ (all f32) ·
+//	14 moveMode · 15 fireMode · 16 selfDestructMs · 17 carriedBy ·
+//	18 pieceOff (f32 index into the pieces region) · 19 pieceCount (floats)
 //
 // The rarely-consumed extras (carrying, building, prodQueue, queue) are NOT
 // packed — a consumer that needs them uses the classic step() form.
