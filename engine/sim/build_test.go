@@ -317,7 +317,7 @@ func TestRepairResumesAbandonedFrame(t *testing.T) {
 // to a fully-built, damaged friendly restores its hit points back to full over
 // time (rather than resuming construction, which a completed hull has none of).
 func TestRepairHealsDamagedHull(t *testing.T) {
-	w := New(Config{Seed: 91, Economy: EconomyTA, StartMetal: -1, StartEnergy: -1})
+	w := New(Config{Seed: 91, Economy: EconomyTA})
 	bld := w.AddUnit("builder", builderMeta(), nil, fixed.Vec2{}, 0, 0)
 	tgtMeta := testMeta("depot")
 	tgtMeta.CanMove = false
