@@ -1,0 +1,67 @@
+version: '3'
+
+dotenv: ['.env.local', '.env']
+
+tasks:
+  default:
+    desc: Full quality gate — Go (fmt/vet/build/test/lint) plus the JS wasm build and smoke test
+    cmds:
+      - task: deps
+      - task: fmt-check
+      - task: vet
+      - task: build
+      - task: test
+      - task: lint
+      - task: js
+
+  # ---- Go ----
+  deps:
+    desc: Download Go module dependencies
+    cmds:
+      - go mod download
+
+  fmt:
+    desc: Format all Go sources with gofmt
+    cmds:
+      - gofmt -w $(git ls-files '*.go')
+
+  fmt-check:
+    desc: Verify every Go source is gofmt-clean
+    cmds:
+      - |
+        out="$(gofmt -l $(git ls-files '*.go'))"
+        if [ -n "$out" ]; then
+          echo "The following files are not gofmt-clean:"
+          echo "$out"
+          exit 1
+        fi
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  build:
+    desc: Build all Go packages
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run all Go tests (asset-gated tests skip cleanly; sandbox parity golden still runs)
+    env:
+      ALLOW_SKIP_ASSETS: 'true'
+    cmds:
+      - go test ./...
+
+  lint:
+    desc: Run golangci-lint (pinned to the CI version, assumed installed)
+    cmds:
+      - golangci-lint run ./...
+
+  # ---- JS ----
+  js:
+    desc: JS gate — install deps, build the engine wasm, run the replay smoke test
+    cmds:
+      - npm ci
+      - npm run build
+      - npm test
