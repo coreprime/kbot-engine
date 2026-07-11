@@ -96,6 +96,7 @@ func (w *World) applyCapture(u *Unit, targetID uint32) {
 	u.capTarget = targetID
 	u.capAccum = 0
 	u.capTime = captureTime(t)
+	u.repairTarget = 0
 	u.hasMove = false
 	u.hasAttack = false
 }
@@ -120,8 +121,35 @@ func (w *World) applyReclaim(u *Unit, targetID uint32) {
 	u.reclaimTarget = targetID
 	u.reclaimAccum = 0
 	u.reclaimFeature = 0
+	u.repairTarget = 0
 	u.hasMove = false
 	u.hasAttack = false
+}
+
+// applyRepair arms a repair channel: a mobile builder restores a fully-built,
+// damaged friendly's hit points over time at the builder's workertime pace,
+// draining the prorated buildcost. Same-side only, and a hull already at full
+// health needs no work. The build-resume path (an under-construction frame)
+// raises build progress instead and is handled separately.
+func (w *World) applyRepair(u, b *Unit) {
+	if u == nil || u.Dead || u.underConstruction() || u.Meta == nil ||
+		!u.Meta.IsBuilder || !u.Meta.CanMove {
+		return
+	}
+	if b == nil || b.Dead || b.underConstruction() || b.Meta == nil || b == u {
+		return
+	}
+	if b.Side != u.Side || b.Health >= fixed.FromInt(100) {
+		return
+	}
+	w.cancelBuild(u)
+	u.repairTarget = b.ID
+	u.reclaimTarget = 0
+	u.reclaimFeature = 0
+	u.capTarget = 0
+	u.hasMove = false
+	u.hasAttack = false
+	u.queue = nil
 }
 
 // applyFeatureReclaim arms a reclaim channel against a map feature or wreck:
@@ -157,6 +185,7 @@ func (w *World) applyResurrect(u *Unit, featureID uint32, targetBuildTime float6
 	}
 	u.resurrectFeature = featureID
 	u.resurrectAccum = 0
+	u.repairTarget = 0
 	u.resurrectChanTicks = resurrectTicks(u.Meta.WorkerTime, targetBuildTime)
 	if u.resurrectChanTicks < 1 {
 		u.resurrectChanTicks = 1
@@ -254,6 +283,111 @@ func (w *World) stepSpecials(u *Unit) {
 	}
 	if u.resurrectFeature != 0 {
 		w.stepResurrect(u)
+	}
+	if u.repairTarget != 0 {
+		w.stepRepair(u)
+	}
+}
+
+// stepRepair advances an active repair channel one tick: the builder nanolathes
+// its damaged friendly's hit points back up at its workertime pace, draining the
+// prorated buildcost through the pool authority. The channel ends when the hull
+// reaches full health, dies, or falls back under construction.
+func (w *World) stepRepair(u *Unit) {
+	t := w.units[u.repairTarget]
+	if t == nil || t.Dead || t.underConstruction() || t.Meta == nil {
+		u.repairTarget = 0
+		return
+	}
+	full := fixed.FromInt(100)
+	if t.Health >= full {
+		u.repairTarget = 0
+		return
+	}
+	if w.econModel == EconomyTAK {
+		w.takApplyRepair(u, t)
+	} else {
+		w.taApplyRepair(u, t)
+	}
+	if t.Health >= full {
+		t.Health = full
+		u.repairTarget = 0
+	}
+}
+
+// taApplyRepair heals one tick of TA repair: workertime/30 build points restore
+// the same fraction of the hull the equivalent construction tick would raise,
+// costing the prorated buildcost through the stall-aware demand path (all or
+// nothing per tick — a stalled builder heals nothing).
+func (w *World) taApplyRepair(builder, t *Unit) {
+	amount := builder.Meta.Econ.WorkerTime / 30
+	if amount == 0 {
+		return
+	}
+	bt := t.Meta.Econ.BuildTime
+	if bt <= 0 {
+		bt = 1
+	}
+	// Fraction of a full build's worth of hull the nanolathe restores this tick.
+	frac := float64(amount) / float64(bt)
+	full := fixed.FromInt(100)
+	remaining := (full - t.Health).Float() // percent points still missing
+	healPct := frac * 100
+	if healPct > remaining {
+		healPct = remaining
+		frac = healPct / 100
+	}
+	if healPct <= 0 {
+		return
+	}
+	costE := f32(frac * float64(t.Meta.Econ.BuildCostEnergy))
+	costM := f32(frac * float64(t.Meta.Econ.BuildCostMetal))
+	if !econAccumulate2(builder, costE, costM) {
+		return // stalled: no HP, no drain
+	}
+	w.tallySpend(builder.Side, float64(costM), float64(costE), 0)
+	t.Health += fixed.FromFloat(healPct)
+	if t.Health > full {
+		t.Health = full
+	}
+}
+
+// takApplyRepair heals one tick of TA:K repair: the throttle-scaled workertime
+// restores the corresponding fraction of the hull, clamped to the live mana
+// pool so a repair slows smoothly and never over-draws.
+func (w *World) takApplyRepair(builder, t *Unit) {
+	if builder.Side < 0 || builder.Side >= maxSides {
+		return
+	}
+	p := &w.econTAK[builder.Side]
+	tEc := &t.Meta.Econ
+	amount := float64(builder.Meta.Econ.WorkerTimeF) * takTickScale
+	eff := float64(p.throttle) * amount * float64(tEc.BuildTimeRecip) // fraction of a full build
+	full := fixed.FromInt(100)
+	remaining := (full - t.Health).Float() / 100 // fraction still missing
+	if eff > remaining {
+		eff = remaining
+	}
+	if eff <= 0 {
+		return
+	}
+	cost := eff * float64(tEc.BuildCost)
+	if float64(p.stock) < cost {
+		r := 0.0
+		if p.stock > 0 {
+			r = float64(p.stock) / cost
+		}
+		cost *= r
+		eff *= r
+	}
+	if eff <= 0 {
+		return
+	}
+	p.stock = f32(float64(p.stock) - cost)
+	w.tallySpend(builder.Side, 0, 0, cost)
+	t.Health += fixed.FromFloat(eff * 100)
+	if t.Health > full {
+		t.Health = full
 	}
 }
 

@@ -268,6 +268,12 @@ type Unit struct {
 	resurrectFeature   uint32
 	resurrectAccum     int
 	resurrectChanTicks int
+	// repairTarget drives an active repair channel: a mobile builder assigned
+	// to a fully-built, damaged friendly restores its hit points over time at
+	// the builder's workertime pace, draining the prorated buildcost (0 = no
+	// repair running). Distinct from the build-resume path (an under-construction
+	// frame), which raises build progress rather than healing a completed hull.
+	repairTarget uint32
 	// cloakStance is the unit's cloak INTENT (a Cloak order toggles it);
 	// cloaked is the derived ACTUAL state read by LOS/targeting. A stance unit
 	// is cloaked only while it can pay the drain and no decloak hold is live.
@@ -2065,24 +2071,30 @@ func (w *World) ApplyOrder(o order.Order) {
 	case order.KindShare:
 		w.applyShare(o.ShareFrom, o.ShareTo, o.ShareMetal, o.ShareEnergy)
 	case order.KindBuild:
-		// Resume gesture: a Build naming an existing under-construction
-		// frame (TargetUnit) sends the builder to that frame and continues
-		// raising IT instead of spawning a fresh one.
+		// A Build naming an existing unit (TargetUnit) is one of two nanolathe
+		// gestures on that unit rather than a fresh construction site:
+		//   • an under-construction frame → RESUME: walk over and keep raising it;
+		//   • a fully-built but damaged friendly → REPAIR: restore its hit points.
 		if o.TargetUnit != 0 {
 			u := w.units[o.UnitID]
 			b := w.units[o.TargetUnit]
 			if u == nil || u.Dead || u.Meta == nil || !u.Meta.IsBuilder || !u.Meta.CanMove ||
-				b == nil || b.Dead || !b.underConstruction() {
+				b == nil || b.Dead {
 				return
 			}
-			w.cancelBuild(u)
-			u.buildState = buildApproach
-			u.buildName = b.Name
-			u.buildSite = b.loco.Pos
-			u.buildHeadingSet = false
-			u.buildResumeID = b.ID
-			u.hasAttack = false
-			u.queue = nil
+			if b.underConstruction() {
+				w.cancelBuild(u)
+				u.repairTarget = 0
+				u.buildState = buildApproach
+				u.buildName = b.Name
+				u.buildSite = b.loco.Pos
+				u.buildHeadingSet = false
+				u.buildResumeID = b.ID
+				u.hasAttack = false
+				u.queue = nil
+				return
+			}
+			w.applyRepair(u, b)
 			return
 		}
 		// A site the buildee cannot legally occupy (sonar on land, a plant
@@ -2120,6 +2132,7 @@ func (w *World) ApplyOrder(o order.Order) {
 			// half-built buildee stays, inert, where it was abandoned — as
 			// in TA).
 			w.cancelBuild(u)
+			u.repairTarget = 0
 			u.buildState = buildApproach
 			u.buildName = o.Name
 			u.buildSite = o.Target
@@ -2256,6 +2269,7 @@ func (w *World) stopUnit(id uint32) {
 	u.autoEngaged = false
 	u.loadTarget = 0
 	u.hasUnload = false
+	u.repairTarget = 0
 	// Standing here is the unit's new post.
 	u.homePos = u.loco.Pos
 	w.cancelBuild(u)

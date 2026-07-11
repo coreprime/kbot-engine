@@ -313,6 +313,43 @@ func TestRepairResumesAbandonedFrame(t *testing.T) {
 	}
 }
 
+// TestRepairHealsDamagedHull pins the repair channel: a mobile builder assigned
+// to a fully-built, damaged friendly restores its hit points back to full over
+// time (rather than resuming construction, which a completed hull has none of).
+func TestRepairHealsDamagedHull(t *testing.T) {
+	w := New(Config{Seed: 91, Economy: EconomyTA, StartMetal: -1, StartEnergy: -1})
+	bld := w.AddUnit("builder", builderMeta(), nil, fixed.Vec2{}, 0, 0)
+	tgtMeta := testMeta("depot")
+	tgtMeta.CanMove = false
+	tgtMeta.MaxHealth = fixed.FromInt(100)
+	setBuildStats(tgtMeta, 100, 300, 200)
+	tgt := w.AddUnit("depot", tgtMeta, nil, fixed.Vec2{X: fixed.FromInt(60)}, 0, 0)
+	b := w.UnitByID(tgt)
+	// Wound the finished hull to 40%.
+	b.Health = fixed.FromInt(40)
+	if b.underConstruction() {
+		t.Fatal("target should be fully built, not under construction")
+	}
+	w.ApplyOrder(order.Repair(bld, tgt))
+	if w.UnitByID(bld).repairTarget != tgt {
+		t.Fatalf("repair order did not arm the channel (repairTarget=%d)", w.UnitByID(bld).repairTarget)
+	}
+	for i := 0; i < 400 && b.Health < fixed.FromInt(100); i++ {
+		w.Step(nil)
+	}
+	if b.Health < fixed.FromInt(100) {
+		t.Fatalf("repair did not restore full health (at %v%%)", b.Health.Float())
+	}
+	if w.UnitByID(bld).repairTarget != 0 {
+		t.Fatalf("repair channel should clear once the hull is full")
+	}
+	// A healthy hull is not a valid repair target — the order is a no-op.
+	w.ApplyOrder(order.Repair(bld, tgt))
+	if w.UnitByID(bld).repairTarget != 0 {
+		t.Fatalf("repair armed on an undamaged hull")
+	}
+}
+
 // TestSlopeLegalityRaw pins the engines' slope legality (locomotion spec
 // §3.3): the cell-pair height delta compares RAW against the unit's raw
 // maxslope with a ≤ comparison — a delta exactly at maxslope is legal, one
