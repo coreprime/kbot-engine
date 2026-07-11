@@ -217,6 +217,10 @@ func (w *World) cacheExtractorYield(u *Unit) {
 	// by 2^-16 — an exact integer either way — then scales by the float32
 	// extractsmetal and stores the yield as float32.
 	u.mexYield = f32(float64(u.Meta.Econ.ExtractsMetal) * float64(sum))
+	// The same footprint sum (not the yield) is the argument the engine hands
+	// the extractor's SetSpeed script on activation, so its rotor turns faster
+	// over a richer deposit. Purely cosmetic; drives no pool arithmetic.
+	u.mexSpin = int32(sum)
 }
 
 // econAccumulate posts single-axis demand (TA): the request always accrues;

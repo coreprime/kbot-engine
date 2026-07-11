@@ -370,6 +370,8 @@ type Unit struct {
 	// maxdamage — authoritative while under construction. active mirrors
 	// the engines' ACTIVE bit, which gates energyuse and the production
 	// suites. mexYield is the extractor income cached once at placement.
+	// mexSpin is the raw footprint metal sum an extractor feeds its SetSpeed
+	// script so the rotor spins faster over richer ground (cosmetic only).
 	// lastNanoTick is the last tick any builder's applicator touched this
 	// frame (the nanolathed keep-alive that holds off abandonment decay).
 	// econE/econM are the two axes of the TA per-unit econ slot.
@@ -377,6 +379,7 @@ type Unit struct {
 	buildHP      int32
 	active       bool
 	mexYield     float32
+	mexSpin      int32
 	lastNanoTick uint64
 	econE, econM econAxis
 
@@ -1275,8 +1278,19 @@ func (w *World) setActivation(u *Unit, on bool) {
 	if on {
 		name = "Activate"
 	}
-	if s, ok := u.binding.(CobScripts); ok && s.HasScript(name) {
-		s.Start(name)
+	if s, ok := u.binding.(CobScripts); ok {
+		// A metal extractor switching on hands its rotor script the footprint
+		// metal sum FIRST: SetSpeed writes the spin-speed static the following
+		// Activate → Go captures, so the rotor turns (faster over a richer
+		// deposit) instead of resting at Create's zero. Ordering matters —
+		// the VM snapshots the spin speed when Go's opcode runs, so the static
+		// must already hold the value. Cosmetic: no pool or hash effect.
+		if on && u.Meta != nil && u.Meta.Econ.ExtractsMetal > 0 && s.HasScript("SetSpeed") {
+			s.Start("SetSpeed", int(u.mexSpin))
+		}
+		if s.HasScript(name) {
+			s.Start(name)
+		}
 	}
 	if p, ok := u.binding.(CobPorts); ok {
 		p.SetUnitValuePort(1, boolPort(on))
