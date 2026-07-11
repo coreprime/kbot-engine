@@ -553,6 +553,22 @@ func setTerrain(_ js.Value, args []js.Value) any {
 			js.CopyBytesToGo(t.Road, roads)
 		}
 	}
+	// Baseline metal map: TA floods every plot cell with the map's OTA
+	// SurfaceMetal density, so a metal extractor is buildable on open ground and
+	// its income scales with what sits beneath. Metal-patch features then stamp
+	// richer deposits on top (see AddFeature). Absent/zero leaves the grid
+	// metal-less, which — with an extractor's overlap rule — refuses every plot.
+	if sm := o.Get("surfaceMetal"); !sm.IsUndefined() && !sm.IsNull() {
+		if v := sm.Int(); v > 0 {
+			if v > 255 {
+				v = 255
+			}
+			t.Metal = make([]uint8, t.W*t.H)
+			for i := range t.Metal {
+				t.Metal[i] = uint8(v)
+			}
+		}
+	}
 	inst.world.SetTerrain(t)
 	return true
 }
