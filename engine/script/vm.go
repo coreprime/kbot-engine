@@ -65,10 +65,12 @@ const (
 
 // pieceAnim is one (piece, axis) animator. value/target/speed are fixed-point
 // numbers whose real value equals the COB integer operand, so sub-tick motion
-// accumulates without integer-division drift. kind is sticky after the first
-// MOVE/TURN/SPIN so a finished animation holds its resting pose instead of
-// snapping back to zero; done tracks whether motion is still in progress, which
-// is what WAIT_FOR_TURN/WAIT_FOR_MOVE poll.
+// accumulates without integer-division drift. For MOVE/TURN, target is the
+// destination and speed the approach rate; for SPIN, target is the goal spin
+// speed the live speed ramps toward and decel is that per-tick accel/decel
+// ramp. kind is sticky after the first MOVE/TURN/SPIN so a finished animation
+// holds its resting pose instead of snapping back to zero; done tracks whether
+// motion is still in progress, which is what WAIT_FOR_TURN/WAIT_FOR_MOVE poll.
 type pieceAnim struct {
 	kind   int
 	value  fixed.Fixed
@@ -205,15 +207,22 @@ func tickAnimArray(arr []pieceAnim) {
 			if a.value < -circle {
 				a.value += circle
 			}
-			if a.decel > 0 {
-				ds := dtStep(a.decel)
-				if abs(a.speed) <= ds {
-					a.speed = 0
-					a.done = true
-					a.decel = 0
+			// Ramp the live speed toward the target by the operand each tick
+			// (accel while spinning up, decel while stopping). Rotation is
+			// speed/30 per tick, but the ramp operand is already a per-tick
+			// delta on the per-second speed — the engine stores both the speed
+			// and the ramp pre-divided by the tick rate — so a stop winds down
+			// in speed/decel ticks rather than 30× longer.
+			if a.speed != a.target {
+				delta := a.target - a.speed
+				if a.decel == 0 || abs(delta) <= a.decel {
+					a.speed = a.target
 				} else {
-					a.speed -= sign(a.speed).Mul(ds)
+					a.speed += sign(delta).Mul(a.decel)
 				}
+			}
+			if a.speed == 0 && a.target == 0 {
+				a.done = true
 			}
 		}
 	}
@@ -365,22 +374,36 @@ func (u *Unit) exec(t *thread, ins Instruction) bool {
 			a.done = false
 		}
 	case scripting.OP_SPIN:
+		// SPIN carries two operands: the target speed (top of stack) and the
+		// acceleration ramp beneath it. A zero ramp snaps to the target speed at
+		// once; a non-zero ramp climbs the live speed toward the target by that
+		// much each tick (target is the spin's goal speed, not a position).
 		speed := t.pop()
+		accel := t.pop()
 		if a := u.rotAnim(int(ins.P1), int(ins.P2)); a != nil {
 			a.kind = animSpin
-			a.speed = fixed.FromInt(int(speed))
-			a.decel = 0
+			a.target = fixed.FromInt(int(speed))
+			a.decel = abs(fixed.FromInt(int(accel)))
+			if a.decel == 0 {
+				a.speed = a.target
+			}
 			a.done = false
 		}
 	case scripting.OP_STOP_SPIN:
+		// STOP_SPIN winds the spin down to rest: the target speed becomes zero
+		// and the deceleration operand is the per-tick ramp. A zero operand
+		// halts the piece immediately.
 		decel := t.pop()
 		if a := u.rotAnim(int(ins.P1), int(ins.P2)); a != nil && a.kind == animSpin {
+			a.target = 0
 			d := abs(fixed.FromInt(int(decel)))
-			if d == 0 {
-				d = abs(a.speed)
-			}
 			a.decel = d
-			a.done = false
+			if d == 0 {
+				a.speed = 0
+				a.done = true
+			} else {
+				a.done = false
+			}
 		}
 	case scripting.OP_MOVE_NOW:
 		value := t.pop()

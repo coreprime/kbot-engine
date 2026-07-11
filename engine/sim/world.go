@@ -1002,13 +1002,28 @@ type CobPorts interface {
 	UnitValuePort(port int) int32
 }
 
+// activationValuePort is the COB unit-value port carrying a unit's on/off
+// state (GET_UNIT_VALUE port 1, ACTIVATION).
+const activationValuePort = 1
+
 // UnitSetValuePort writes a COB unit-value port on a unit's script binding. A
-// missing or script-less unit is a silent no-op.
+// missing or script-less unit is a silent no-op. Writing the ACTIVATION port is
+// special-cased through setActivation: it is a unit's authoritative on/off
+// switch, so the write runs the Activate/Deactivate script (starting or halting
+// an extractor rotor, opening or folding a solar) AND flips the sim active bit
+// that gates income and energy upkeep — otherwise the toggle would poke the
+// cosmetic port while the sim kept producing and the rotor kept spinning.
 func (w *World) UnitSetValuePort(id uint32, port int, v int32) {
-	if u := w.units[id]; u != nil {
-		if p, ok := u.binding.(CobPorts); ok {
-			p.SetUnitValuePort(port, v)
-		}
+	u := w.units[id]
+	if u == nil {
+		return
+	}
+	if port == activationValuePort {
+		w.setActivation(u, v != 0)
+		return
+	}
+	if p, ok := u.binding.(CobPorts); ok {
+		p.SetUnitValuePort(port, v)
 	}
 }
 
@@ -1293,7 +1308,7 @@ func (w *World) setActivation(u *Unit, on bool) {
 		}
 	}
 	if p, ok := u.binding.(CobPorts); ok {
-		p.SetUnitValuePort(1, boolPort(on))
+		p.SetUnitValuePort(activationValuePort, boolPort(on))
 	}
 }
 
@@ -1340,7 +1355,7 @@ func (w *World) InitOnOff(id uint32) {
 	}
 	// Rest closed but make the port explicit so the pill reads off.
 	if p, ok := u.binding.(CobPorts); ok {
-		p.SetUnitValuePort(1, 0)
+		p.SetUnitValuePort(activationValuePort, 0)
 	}
 }
 

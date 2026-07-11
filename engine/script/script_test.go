@@ -79,6 +79,54 @@ func TestSpinAdvancesPerTick(t *testing.T) {
 	}
 }
 
+// TestStopSpinWindsDownInSpeedOverDecelTicks pins the STOP_SPIN wind-down rate:
+// the engine stores both the spin speed and the deceleration pre-divided by the
+// tick rate, so a piece spinning at S sheds decel D from its speed every tick
+// and comes to rest in S/D ticks — not 30× longer. SPIN consumes two operands
+// (accel then speed); a zero accel reaches the target speed at once.
+func TestStopSpinWindsDownInSpeedOverDecelTicks(t *testing.T) {
+	p := prog(twoPieces(), 0,
+		ScriptSource{
+			Name: "Go",
+			Insts: []Instruction{
+				i1(scripting.OP_PUSH_IMMEDIATE, 0),   // accel = 0 -> snap to speed
+				i1(scripting.OP_PUSH_IMMEDIATE, 600), // speed = 600 angle-units/sec
+				i2(scripting.OP_SPIN, 0, 0),
+			},
+		},
+		ScriptSource{
+			Name: "Stop",
+			Insts: []Instruction{
+				i1(scripting.OP_PUSH_IMMEDIATE, 60), // decel = 60/sec shed per tick
+				i2(scripting.OP_STOP_SPIN, 0, 0),
+			},
+		})
+	rt := NewRuntime(1)
+	u := rt.NewUnit(p, nil)
+
+	u.Start("Go")
+	rt.Tick(25) // arm the spin at full speed (accel 0)
+	if a := u.rotAnim(0, 0); a == nil || a.done {
+		t.Fatalf("spin should be running after Go")
+	}
+
+	u.Start("Stop")
+	rt.Tick(50) // Stop runs at the tail of this tick; wind-down starts next tick
+
+	// speed 600 sheds 60 each tick -> nine ticks leave it spinning, the tenth
+	// lands it at rest.
+	for i := 0; i < 9; i++ {
+		rt.Tick(int64(75 + i*25))
+		if a := u.rotAnim(0, 0); a == nil || a.done {
+			t.Fatalf("spin wound down too early, after %d decel ticks", i+1)
+		}
+	}
+	rt.Tick(75 + 9*25)
+	if a := u.rotAnim(0, 0); a == nil || !a.done {
+		t.Fatalf("spin should be at rest after speed/decel (10) ticks")
+	}
+}
+
 func TestTurnReachesTargetThenDone(t *testing.T) {
 	// TURN pops target then speed, so push speed first.
 	p := prog(twoPieces(), 0, ScriptSource{
