@@ -363,24 +363,33 @@ func submitSelfDestruct(_ js.Value, args []js.Value) any {
 	return int(inst.sess.Submit(order.SelfDestruct(uint32Slice(args[1]))))
 }
 
-// submitRepair(handle, builderId, targetUnit) -> execTick. Sends a mobile
-// builder to an existing under-construction frame to continue raising it.
+// submitRepair(handle, builderId, targetUnit, queued?) -> execTick. Sends a
+// mobile builder to an existing unit: resume an under-construction frame or heal
+// a damaged completed friendly. A truthy queued appends the job to the builder's
+// shift-queue instead of replacing its orders.
 func submitRepair(_ js.Value, args []js.Value) any {
 	inst := instances[args[0].Int()]
 	if inst == nil {
 		return 0
 	}
+	if len(args) > 3 && args[3].Truthy() {
+		return int(inst.sess.Submit(order.RepairQueued(uint32(args[1].Int()), uint32(args[2].Int()))))
+	}
 	return int(inst.sess.Submit(order.Repair(uint32(args[1].Int()), uint32(args[2].Int()))))
 }
 
-// submitReclaim(handle, unitIds[], targetUnitId) -> execTick. Sends the
-// reclaimers to consume the target unit / wreck / feature for resources.
+// submitReclaim(handle, unitIds[], targetUnitId, queued?) -> execTick. Sends the
+// reclaimers to consume the target unit / wreck / feature for resources. A truthy
+// queued appends the reclaim to each reclaimer's shift-queue.
 func submitReclaim(_ js.Value, args []js.Value) any {
 	inst := instances[args[0].Int()]
 	if inst == nil {
 		return 0
 	}
 	ids := uint32Slice(args[1])
+	if len(args) > 3 && args[3].Truthy() {
+		return int(inst.sess.Submit(order.ReclaimQueued(ids, uint32(args[2].Int()))))
+	}
 	return int(inst.sess.Submit(order.Reclaim(ids, uint32(args[2].Int()))))
 }
 

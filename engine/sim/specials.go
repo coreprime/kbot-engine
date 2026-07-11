@@ -149,7 +149,30 @@ func (w *World) applyRepair(u, b *Unit) {
 	u.capTarget = 0
 	u.hasMove = false
 	u.hasAttack = false
-	u.queue = nil
+}
+
+// armBuildTarget dispatches a Build-with-TargetUnit gesture: an under-
+// construction frame is resumed (walk over and keep raising it), a completed but
+// damaged friendly is repaired. It does not clear the builder's order queue —
+// the immediate order path clears it before calling, while advanceQueue preserves
+// the remaining queue when a popped entry arms the channel.
+func (w *World) armBuildTarget(u, b *Unit) {
+	if u == nil || u.Dead || u.Meta == nil || !u.Meta.IsBuilder || !u.Meta.CanMove ||
+		b == nil || b.Dead {
+		return
+	}
+	if b.underConstruction() {
+		w.cancelBuild(u)
+		u.repairTarget = 0
+		u.buildState = buildApproach
+		u.buildName = b.Name
+		u.buildSite = b.loco.Pos
+		u.buildHeadingSet = false
+		u.buildResumeID = b.ID
+		u.hasAttack = false
+		return
+	}
+	w.applyRepair(u, b)
 }
 
 // applyFeatureReclaim arms a reclaim channel against a map feature or wreck:
@@ -297,11 +320,13 @@ func (w *World) stepRepair(u *Unit) {
 	t := w.units[u.repairTarget]
 	if t == nil || t.Dead || t.underConstruction() || t.Meta == nil {
 		u.repairTarget = 0
+		w.advanceQueue(u)
 		return
 	}
 	full := fixed.FromInt(100)
 	if t.Health >= full {
 		u.repairTarget = 0
+		w.advanceQueue(u)
 		return
 	}
 	if w.econModel == EconomyTAK {
@@ -312,6 +337,7 @@ func (w *World) stepRepair(u *Unit) {
 	if t.Health >= full {
 		t.Health = full
 		u.repairTarget = 0
+		w.advanceQueue(u)
 	}
 }
 
@@ -399,6 +425,7 @@ func (w *World) stepFeatureReclaim(u *Unit) {
 	f := w.features[u.reclaimFeature]
 	if f == nil {
 		u.reclaimFeature, u.reclaimAccum, u.reclaimFeatureTicks = 0, 0, 0
+		w.advanceQueue(u)
 		return
 	}
 	u.reclaimAccum++
@@ -409,6 +436,7 @@ func (w *World) stepFeatureReclaim(u *Unit) {
 	w.emit(frame.Event{Kind: frame.EvDespawn, UnitID: f.ID, Anchor: f.Pos})
 	w.removeFeature(f.ID)
 	u.reclaimFeature, u.reclaimAccum, u.reclaimFeatureTicks = 0, 0, 0
+	w.advanceQueue(u)
 }
 
 // stepCapture advances the capture channel by two accumulator counts per
@@ -510,6 +538,7 @@ func (w *World) stepReclaim(u *Unit) {
 	t := w.units[u.reclaimTarget]
 	if t == nil || t.Dead {
 		u.reclaimTarget, u.reclaimAccum = 0, 0
+		w.advanceQueue(u)
 		return
 	}
 	if w.tick%2 != 0 {
@@ -524,6 +553,7 @@ func (w *World) stepReclaim(u *Unit) {
 	dead := w.reclaimDamage(u.ID, t, chunk)
 	if dead {
 		u.reclaimTarget = 0
+		w.advanceQueue(u)
 	}
 }
 

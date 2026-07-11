@@ -43,6 +43,62 @@ func TestQueuedMovesRunInSequence(t *testing.T) {
 	}
 }
 
+// TestQueuedReclaimAfterMove proves a shift-queued reclaim waits behind the
+// reclaimer's active move leg and only arms — and then consumes the feature —
+// once the move completes.
+func TestQueuedReclaimAfterMove(t *testing.T) {
+	w := New(Config{Seed: 61, Economy: EconomyTA, StartMetal: -1, StartEnergy: -1})
+	bld := w.AddUnit("rec", featureReclaimerMeta("rec"), nil, fixed.Vec2{}, 0, 0)
+	feat := &FeatureMeta{Name: "tree", Metal: 20, Energy: 0, MaxHP: 10, Reclaimable: true}
+	fid := w.AddFeature("tree", feat, FeatureProp, fixed.Vec2{X: fixed.FromInt(220)}, 0, -1)
+	w.ApplyOrder(order.Move([]uint32{bld}, fixed.Vec2{X: fixed.FromInt(120)}))
+	w.ApplyOrder(order.ReclaimQueued([]uint32{bld}, fid))
+
+	u := w.UnitByID(bld)
+	if len(u.queue) != 1 {
+		t.Fatalf("queued reclaim not stored: queue=%d", len(u.queue))
+	}
+	if u.reclaimFeature != 0 {
+		t.Fatalf("queued reclaim armed immediately instead of waiting for the move")
+	}
+	for i := 0; i < 3000 && w.FeatureByID(fid) != nil; i++ {
+		w.Step(nil)
+	}
+	if w.FeatureByID(fid) != nil {
+		t.Fatalf("queued reclaim never consumed the feature")
+	}
+}
+
+// TestQueuedRepairAfterMove proves a shift-queued repair waits behind the
+// builder's active move leg and heals the damaged friendly once the move lands.
+func TestQueuedRepairAfterMove(t *testing.T) {
+	w := New(Config{Seed: 62, Economy: EconomyTA})
+	bld := w.AddUnit("builder", builderMeta(), nil, fixed.Vec2{}, 0, 0)
+	tgtMeta := testMeta("depot")
+	tgtMeta.CanMove = false
+	tgtMeta.MaxHealth = fixed.FromInt(100)
+	setBuildStats(tgtMeta, 100, 300, 200)
+	tgt := w.AddUnit("depot", tgtMeta, nil, fixed.Vec2{X: fixed.FromInt(200)}, 0, 0)
+	b := w.UnitByID(tgt)
+	b.Health = fixed.FromInt(50)
+	w.ApplyOrder(order.Move([]uint32{bld}, fixed.Vec2{X: fixed.FromInt(120)}))
+	w.ApplyOrder(order.RepairQueued(bld, tgt))
+
+	u := w.UnitByID(bld)
+	if len(u.queue) != 1 {
+		t.Fatalf("queued repair not stored: queue=%d", len(u.queue))
+	}
+	if u.repairTarget != 0 {
+		t.Fatalf("queued repair armed immediately instead of waiting for the move")
+	}
+	for i := 0; i < 3000 && b.Health < fixed.FromInt(100); i++ {
+		w.Step(nil)
+	}
+	if b.Health < fixed.FromInt(100) {
+		t.Fatalf("queued repair never restored full health (at %v%%)", b.Health.Float())
+	}
+}
+
 // TestQueuedAttackAfterMove proves a queued attack waits for the move leg, and
 // a queued move waits for that attack's target to die before arming.
 func TestQueuedAttackAfterMove(t *testing.T) {

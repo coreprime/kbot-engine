@@ -2053,7 +2053,16 @@ func (w *World) ApplyOrder(o order.Order) {
 		}
 	case order.KindReclaim:
 		for _, id := range o.UnitIDs {
-			w.applyReclaim(w.units[id], o.TargetUnit)
+			u := w.units[id]
+			if u == nil {
+				continue
+			}
+			// Shift-queued: defer the reclaim behind the reclaimer's current job.
+			if o.Queued && u.working() {
+				u.enqueue(queuedCommand{kind: order.KindReclaim, targetUnit: o.TargetUnit})
+				continue
+			}
+			w.applyReclaim(u, o.TargetUnit)
 		}
 	case order.KindCloak:
 		for _, id := range o.UnitIDs {
@@ -2082,19 +2091,14 @@ func (w *World) ApplyOrder(o order.Order) {
 				b == nil || b.Dead {
 				return
 			}
-			if b.underConstruction() {
-				w.cancelBuild(u)
-				u.repairTarget = 0
-				u.buildState = buildApproach
-				u.buildName = b.Name
-				u.buildSite = b.loco.Pos
-				u.buildHeadingSet = false
-				u.buildResumeID = b.ID
-				u.hasAttack = false
-				u.queue = nil
+			// Shift-queued: defer the resume/repair behind the builder's current
+			// job; advanceQueue arms it when the queue reaches it.
+			if o.Queued && u.working() {
+				u.enqueue(queuedCommand{kind: order.KindBuild, targetUnit: b.ID})
 				return
 			}
-			w.applyRepair(u, b)
+			u.queue = nil
+			w.armBuildTarget(u, b)
 			return
 		}
 		// A site the buildee cannot legally occupy (sonar on land, a plant
@@ -2181,6 +2185,14 @@ func (u *Unit) busy() bool {
 	return u.hasMove || u.hasAttack || len(u.queue) > 0
 }
 
+// working extends busy with the order-channel and construction states a queued
+// reclaim/repair must also wait behind — an active reclaim, repair, capture or
+// build job is a current order too, even though it does not set hasMove/hasAttack.
+func (u *Unit) working() bool {
+	return u.busy() || u.reclaimTarget != 0 || u.reclaimFeature != 0 ||
+		u.repairTarget != 0 || u.capTarget != 0 || u.buildState != buildIdle
+}
+
 // enqueue appends a deferred order, bounded by maxOrderQueue (excess orders
 // are dropped — the same cap retail TA applied to its queue memory).
 func (u *Unit) enqueue(c queuedCommand) {
@@ -2233,6 +2245,18 @@ func (w *World) advanceQueue(u *Unit) {
 				u.buildHeading = c.heading
 				u.buildHeadingSet = c.headingSet
 				u.buildState = buildApproach
+				return
+			}
+			// A nameless Build with a target unit is a queued resume/repair job.
+			if c.name == "" && c.targetUnit != 0 {
+				w.armBuildTarget(u, w.units[c.targetUnit])
+				if u.buildState != buildIdle || u.repairTarget != 0 {
+					return
+				}
+			}
+		case order.KindReclaim:
+			w.applyReclaim(u, c.targetUnit)
+			if u.reclaimTarget != 0 || u.reclaimFeature != 0 {
 				return
 			}
 		case order.KindLoad:

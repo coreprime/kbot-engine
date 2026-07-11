@@ -169,10 +169,17 @@ func BuildQueued(builder uint32, name string, target fixed.Vec2, heading int32) 
 	return Order{Kind: KindBuild, UnitID: builder, Name: name, Target: target, Heading: heading, Queued: true}
 }
 
-// Repair sends a mobile builder to an existing under-construction frame to
-// continue raising it (the hover-a-half-built-structure gesture).
+// Repair sends a mobile builder to an existing unit: an under-construction
+// frame is resumed, a damaged completed friendly is healed (the hover-a-unit
+// nanolathe gesture).
 func Repair(builder uint32, target uint32) Order {
 	return Order{Kind: KindBuild, UnitID: builder, TargetUnit: target}
+}
+
+// RepairQueued appends a repair/resume job behind the builder's current orders
+// (the shift-click gesture).
+func RepairQueued(builder uint32, target uint32) Order {
+	return Order{Kind: KindBuild, UnitID: builder, TargetUnit: target, Queued: true}
 }
 
 // Patrol appends a patrol waypoint to each unit's queue.
@@ -208,6 +215,12 @@ func Capture(units []uint32, targetUnit uint32) Order {
 // Reclaim sends reclaimers to consume a target unit for resources.
 func Reclaim(units []uint32, targetUnit uint32) Order {
 	return Order{Kind: KindReclaim, UnitIDs: units, TargetUnit: targetUnit}
+}
+
+// ReclaimQueued appends a reclaim job behind each reclaimer's current orders
+// (the shift-click gesture).
+func ReclaimQueued(units []uint32, targetUnit uint32) Order {
+	return Order{Kind: KindReclaim, UnitIDs: units, TargetUnit: targetUnit, Queued: true}
 }
 
 // Cloak toggles the units' cloak stance.
