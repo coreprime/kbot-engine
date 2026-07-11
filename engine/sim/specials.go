@@ -1093,6 +1093,46 @@ func (w *World) CoverageCovers(id uint32, slot int, x, z int) bool {
 	return coverageCovers(wm.CoverageWU, x-p.X.Int(), z-p.Z.Int())
 }
 
+// applyShare transfers metal / energy from one allied side to another (the
+// multiplayer give-to-ally gesture; economy.md §2.6). Only the TA economy has a
+// dual pool to move between, so this is a no-op under the TA:K mana model. The
+// donor pool is debited immediately — clamped to what it actually holds, so a
+// player can never give more than they have — and the amount is credited to the
+// recipient's transfer accumulator, which the next settle folds into their
+// production (subject to the storage clamp and any AI difficulty handicap). A
+// side may not share with itself.
+func (w *World) applyShare(from, to, metal, energy int) {
+	if w.econModel == EconomyTAK || from == to {
+		return
+	}
+	if from < 0 || from >= maxSides || to < 0 || to >= maxSides {
+		return
+	}
+	src := &w.econTA[from]
+	if !src.seeded {
+		return
+	}
+	if !w.econTA[to].seeded {
+		w.seedSideEconomy(to)
+	}
+	if metal > 0 {
+		give := float64(metal)
+		if give > float64(src.stockM) {
+			give = float64(src.stockM)
+		}
+		src.stockM = f32(float64(src.stockM) - give)
+		w.xferProdM[to] += give
+	}
+	if energy > 0 {
+		give := float64(energy)
+		if give > float64(src.stockE) {
+			give = float64(src.stockE)
+		}
+		src.stockE = f32(float64(src.stockE) - give)
+		w.xferProdE[to] += give
+	}
+}
+
 // creditMetal adds a lump metal gain to a side's TA pool (reclaim salvage /
 // resource share). Settle-clamped like all income: the pool is bumped and the
 // next settle's storage clamp meters any overflow.

@@ -1,0 +1,82 @@
+# TA ally resource sharing: a give-to-ally transfer debits the donor pool at
+# once (clamped to holdings) and credits the recipient's production accumulator,
+# so the resources land in the recipient's pool at their next settle — subject
+# to the storage clamp.
+# Ground truth: economy.md §2.6 (player-to-player sharing / transfers).
+name: ta-econ-ally-share
+game: ta
+system: economy
+spec: economy.md §2.6
+description: >-
+  Two idle ARMFLASH kbots seed a pool on side 0 (donor) and side 1 (recipient).
+  Both open with 100 metal / 100 energy (cap 200, so there is headroom). At
+  frame 5 side 0 shares 50 metal and 30 energy to side 1: the donor is debited
+  immediately, and the transfer lands in the recipient's pool at the frame-30
+  settle.
+seed: 1
+duration: 40
+start_metal: 100
+start_energy: 100
+units:
+  - alias: giver
+    type: armflash
+    side: 0
+    pos: [200, 200]
+    heading: 0
+  - alias: taker
+    type: armflash
+    side: 1
+    pos: [400, 400]
+    heading: 0
+actions:
+  - at: 5
+    do: share
+    from_side: 0
+    to_side: 1
+    share_metal: 50
+    share_energy: 30
+checks:
+  - at: 10
+    side: 0
+    observable: side.metal
+    expect: 3276800
+    label: donor metal debited immediately
+    derivation: |
+      The donor pool is debited the tick the order lands (frame 5), before any
+      settle: 100 - 50 = 50 metal. Raw 50 * 65536 = 3276800.
+  - at: 10
+    side: 0
+    observable: side.energy
+    expect: 4587520
+    label: donor energy debited immediately
+    derivation: |
+      100 - 30 = 70 energy at frame 10 (debited at frame 5). Raw
+      70 * 65536 = 4587520.
+  - at: 35
+    side: 1
+    observable: side.metal_produced
+    expect: 3276800
+    label: transfer lands as recipient production
+    derivation: |
+      The 50 metal is credited to the recipient's production accumulator and
+      folds in at the frame-30 settle. The recipient's kbot produces nothing,
+      so lifetime metal produced = the 50 transferred. Raw 50 * 65536 = 3276800.
+    missing_if_zero: true
+  - at: 35
+    side: 1
+    observable: side.metal
+    expect: 9830400
+    label: recipient pool gains the transfer at settle
+    derivation: |
+      At the frame-30 settle avail = 50 (transfer) + 100 (stored) = 150, below
+      the 200 cap, so stored metal = 150. Raw 150 * 65536 = 9830400.
+  - at: 35
+    side: 1
+    observable: side.energy
+    expect: 8552448
+    label: recipient energy gains the transfer at settle
+    derivation: |
+      The recipient's ARMFLASH has passive EnergyMake=0.5, so its own frame-30
+      production is 0.5 energy. avail = 30 (transfer) + 0.5 (production) + 100
+      (stored) = 130.5, below the 200 cap. Raw 130.5 * 65536 = 8552448 — the
+      transfer lands on top of the recipient's ordinary income.

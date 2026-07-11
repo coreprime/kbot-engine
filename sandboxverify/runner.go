@@ -316,6 +316,10 @@ func (st *runState) apply(a ActionSpec) {
 		st.world.ApplyOrder(order.Cloak([]uint32{unit}))
 	case "self_destruct":
 		st.world.ApplyOrder(order.SelfDestruct([]uint32{unit}))
+	case "share":
+		// Ally resource transfer between two sides (economy.md §2.6). Debits
+		// the donor immediately; the recipient is credited at its next settle.
+		st.world.ApplyOrder(order.Share(a.FromSide, a.ToSide, a.ShareMetal, a.ShareEnergy))
 	default:
 		// The order vocabulary has no such command — the mechanic is absent
 		// from the sandbox (cloak, capture, ...). That absence is the finding.

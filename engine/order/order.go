@@ -62,6 +62,12 @@ const (
 	// max(kamikazedistance, 16) wu and then self-destruct, detonating its
 	// selfdestructas blast on top of the target.
 	KindKamikaze
+	// Share transfers resources between allied players (the multiplayer
+	// give-to-ally gesture). ShareFrom's pool is debited immediately (clamped
+	// to what it holds); the amount is credited to ShareTo's production
+	// accumulator, so it lands in their pool at the next settle — subject to
+	// the storage clamp and, for an AI receiver, the difficulty multiplier.
+	KindShare
 )
 
 // Standing-order values carried by a Stance order.
@@ -117,6 +123,13 @@ type Order struct {
 	// Standing orders for Stance (always both set; see Move/Fire constants).
 	MoveMode int
 	FireMode int
+
+	// Share parameters: the donor and recipient side indices and the metal /
+	// energy amounts transferred (whole resource units).
+	ShareFrom   int
+	ShareTo     int
+	ShareMetal  int
+	ShareEnergy int
 }
 
 // Move builds a move order.
@@ -205,6 +218,13 @@ func Cloak(units []uint32) Order {
 // Kamikaze sends kamikaze units to close on a target and self-destruct.
 func Kamikaze(units []uint32, targetUnit uint32) Order {
 	return Order{Kind: KindKamikaze, UnitIDs: units, TargetUnit: targetUnit}
+}
+
+// Share transfers metal / energy from one allied side to another (the
+// give-to-ally gesture). The donor pool is debited at once; the recipient is
+// credited at its next settle.
+func Share(fromSide, toSide, metal, energy int) Order {
+	return Order{Kind: KindShare, ShareFrom: fromSide, ShareTo: toSide, ShareMetal: metal, ShareEnergy: energy}
 }
 
 // FireAtUnit points one unit's weapon slot at a target unit (manual force-fire

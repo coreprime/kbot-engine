@@ -483,6 +483,11 @@ type World struct {
 	// side (economy.md §1.6). Applied to the summed production at each TA
 	// settle.
 	aiMul [maxSides]float64
+	// xferProdE/M hold resource transfers credited to a side but not yet
+	// settled — the receiver half of an ally share (economy.md §2.6). The next
+	// TA settle folds them into that side's production sum (so they clamp to
+	// storage and scale by any AI handicap) and clears them.
+	xferProdE, xferProdM [maxSides]float64
 
 	// terrain is the installed map height field (nil = flat sandbox grid).
 	// Configuration like meta, identical on every peer, never hashed.
@@ -2013,6 +2018,8 @@ func (w *World) ApplyOrder(o order.Order) {
 		for _, id := range o.UnitIDs {
 			w.applyKamikaze(w.units[id], o.TargetUnit)
 		}
+	case order.KindShare:
+		w.applyShare(o.ShareFrom, o.ShareTo, o.ShareMetal, o.ShareEnergy)
 	case order.KindBuild:
 		// Resume gesture: a Build naming an existing under-construction
 		// frame (TargetUnit) sends the builder to that frame and continues

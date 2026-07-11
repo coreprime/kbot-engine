@@ -310,6 +310,15 @@ func (w *World) settleTA() {
 		if !p.seeded {
 			continue
 		}
+		// Ally transfers received since the last settle join this side's
+		// production before scaling and the storage clamp (economy.md §2.6), so
+		// a gift to an AI ally is difficulty-scaled and a gift that overflows
+		// storage is metered as waste. Cleared once folded.
+		if w.xferProdE[side] != 0 || w.xferProdM[side] != 0 {
+			prodE[side] += w.xferProdE[side]
+			prodM[side] += w.xferProdM[side]
+			w.xferProdE[side], w.xferProdM[side] = 0, 0
+		}
 		// Single-player AI handicap: an AI side's whole production credit is
 		// scaled by the difficulty multiplier (economy.md §1.6 — Easy ×0.5,
 		// Medium ×0.7, Hard ×1.0), so the credited income, the published rate

@@ -106,7 +106,7 @@ type UnitSpec struct {
 // check that requires them grades missing.
 type ActionSpec struct {
 	At   int    `yaml:"at"` // engine frame
-	Do   string `yaml:"do"` // move|stop|attack|fire_at_point|build|repair|stance|set_kills|set_paralyze|cloak|capture|reclaim|self_destruct
+	Do   string `yaml:"do"` // move|stop|attack|fire_at_point|build|repair|stance|set_kills|set_paralyze|cloak|capture|reclaim|self_destruct|share
 	ID   string `yaml:"id"` // optional handle for requires_action
 	Unit string `yaml:"unit"`
 	// To is the move / fire / build destination in world units.
@@ -129,6 +129,12 @@ type ActionSpec struct {
 	// Amount is a scalar the measurement-hook actions carry (set_paralyze
 	// injects this many paralyze ticks).
 	Amount int `yaml:"amount"`
+	// Share parameters (the share action): donor and recipient side indices
+	// and the metal / energy amounts transferred.
+	FromSide    int `yaml:"from_side"`
+	ToSide      int `yaml:"to_side"`
+	ShareMetal  int `yaml:"share_metal"`
+	ShareEnergy int `yaml:"share_energy"`
 }
 
 // CheckSpec samples one observable at a spec tick and grades it.
