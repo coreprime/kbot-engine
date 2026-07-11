@@ -342,6 +342,14 @@ type Unit struct {
 	egX, egZ    fixed.Fixed
 	flybySide   int
 
+	// airVel is the live 3-D flight velocity an airborne unit carries. Unlike a
+	// ground mover — whose motion is a scalar speed locked to its heading —
+	// an aircraft's velocity diverges from its nose while it banks, so the
+	// horizontal flight law integrates a true vector here (X/Z horizontal, Y
+	// vertical) and derives the scalar loco.Speed from its magnitude. Zeroed
+	// whenever the unit is not flying under its own power.
+	airVel fixed.Vec3
+
 	// Aircraft grounded/airborne edge. wasAirborne latches the last altitude
 	// state so the ground→air and air→ground transitions each fire exactly
 	// once — takeoff opens the flight pose (Activate / BeginFlight), landing
@@ -1428,6 +1436,10 @@ type RestoredUnit struct {
 	Pos        fixed.Vec3
 	Heading    fixed.Fixed // raw fractional TA-angle
 	Speed      fixed.Fixed
+	// AirVel is an aircraft's live 3-D flight velocity. It diverges from the
+	// heading while banking, so a late joiner must resume it verbatim or its
+	// prediction re-flies from a standstill and desyncs the next tick.
+	AirVel     fixed.Vec3
 	HasMove    bool
 	MoveTarget fixed.Vec2
 	Health     fixed.Fixed
@@ -1590,6 +1602,7 @@ func (w *World) ExportUnits() []RestoredUnit {
 			Pos:           u.Pos(),
 			Heading:       u.loco.Heading,
 			Speed:         u.loco.Speed,
+			AirVel:        u.airVel,
 			HasMove:       u.hasMove,
 			MoveTarget:    u.moveTarget,
 			Health:        u.Health,
@@ -1784,6 +1797,7 @@ func (w *World) Restore(tick uint64, units []RestoredUnit, projectiles []Restore
 		u.loco.Pos = fixed.Vec2{X: ru.Pos.X, Z: ru.Pos.Z}
 		u.loco.Heading = ru.Heading
 		u.loco.Speed = ru.Speed
+		u.airVel = ru.AirVel
 		u.PosY = ru.Pos.Y
 		// Economy state derives from the wire's fixed-point axes; the side
 		// pools seed exactly as a fresh spawn would (the authority's live

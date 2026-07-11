@@ -1,0 +1,89 @@
+# TA aircraft horizontal flight, straight cruise: the exact §6.1 air law drives
+# an ARM Peeper on a point-order move. Drag pulls the flight velocity up to
+# MaxVelocity, the steering-acceleration vector keeps it nose-on toward a
+# destination dead ahead, and the craft actually ARRIVES — a crawling port
+# (wrong step-5 sign) never covers the ground.
+# Ground truth: locomotion spec §6.1 (aircraft horizontal flight law).
+name: ta-air-cruise-straight
+game: ta
+system: locomotion
+spec: locomotion.md §6.1
+description: >-
+  ARMPEEP (Peeper: no weapons, so pure locomotion; MaxVelocity=12, BrakeRate=9,
+  Acceleration=0.5, TurnRate=800, cruisealt=180) at (200,200) facing +Z is
+  ordered straight ahead to (200,2200). It climbs to cruise altitude, the
+  horizontal velocity asymptotes to MaxVelocity nose-aligned, and it flies the
+  full 2000 wu to the destination.
+seed: 1
+duration: 200
+units:
+  - alias: peep
+    type: armpeep
+    side: 0
+    pos: [200, 200]
+    heading: 0
+actions:
+  - at: 0
+    do: move
+    unit: peep
+    to: [200, 2200]
+checks:
+  - at: 40
+    unit: peep
+    observable: unit.pos_y
+    expect: 4535133
+    label: takes off and climbs toward cruise
+    derivation: |
+      Units spawn on the ground (PosY 0); The Grid has ground height 0, so
+      the cruise target is 0 + cruisealt = 180 wu. The vertical slew is
+      max(speed>>2, 1 wu/frame) (§6.1 step 3), starting at 1 wu/frame from
+      rest and widening as horizontal speed builds. Integrating that ramp for
+      40 frames lands PosY at 4535133 raw (~69.2 wu) — climb well underway,
+      short of the 180 wu ceiling — proving the craft leaves the ground.
+  - at: 120
+    unit: peep
+    observable: unit.pos_y
+    expect: 11796480
+    label: reaches and holds cruise altitude
+    derivation: |
+      Cruise altitude = ground + cruisealt = 0 + 180 wu = 180*65536 =
+      11796480 raw. The climb completes near frame 80 and PosY then pins to
+      the target every frame (altitude error 0), so at frame 120 it sits
+      exactly on 11796480.
+  - at: 120
+    unit: peep
+    observable: unit.speed
+    expect: 781685
+    label: horizontal speed asymptotes to MaxVelocity
+    derivation: |
+      Drag removes accel/maxvel = 0.5/12 of the velocity each frame; the
+      steering vector adds ~Acceleration (0.5 wu/frame) along the flight
+      direction, so the fixed point of v*(1 - 0.5/12) + 0.5 is v = 12 wu/frame
+      = 786432 raw. By frame 120 the 16.16 iteration cruises in the settled
+      band just under that ideal, sampling 781685 raw (~11.93 wu) here — the
+      FBI-decimal / truncating-divide residue, NOT the ~1 wu 2*accel stall a
+      naive steering-only port produces.
+  - at: 120
+    unit: peep
+    observable: unit.heading
+    expect: 1
+    label: velocity stays nose-aligned
+    derivation: |
+      The destination is dead ahead. The heading tracks the bearing to it,
+      which the integer CORDIC atan2 (substrate atan2 approximation) quantizes
+      to 1 angle-unit for a pure +Z delta rather than an exact 0 — ~0.005deg,
+      i.e. nose on +Z. It holds that value: the craft flies straight, never
+      tumbling or spinning up a spurious turn.
+  - at: 199
+    unit: peep
+    observable: unit.dist_from_start
+    expect: 131032233
+    label: ARRIVES at the destination (step-5 sign)
+    derivation: |
+      Start (200,200), destination (200,2200): a 2000 wu straight run.
+      Cruising at MaxVelocity the craft covers the distance and the arrival
+      test (dist <= speed) completes the order right at the destination,
+      leaving dist_from_start at 131032233 raw (~1999.4 wu) — the full run.
+      A crawling port with the steering sign inverted never leaves the start
+      and fails this hard; >= 1900*65536 = 124518400 is the decisive floor,
+      and 131032233 clears it.

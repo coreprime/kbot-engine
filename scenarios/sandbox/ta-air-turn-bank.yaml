@@ -1,0 +1,79 @@
+# TA aircraft banking turn: the exact §6.1 air law turns the nose at the
+# turn-rate clamp while the flight velocity — decoupled from the heading —
+# drives straight at a destination square off the wing. The overspeed trim
+# re-lays speed along the nose once past the brake rate, so the craft banks
+# through the turn instead of pivoting in place or sliding sideways forever.
+# Ground truth: locomotion spec §6.1 (aircraft horizontal flight law).
+name: ta-air-turn-bank
+game: ta
+system: locomotion
+spec: locomotion.md §6.1
+description: >-
+  ARMPEEP (MaxVelocity=12, BrakeRate=9, Acceleration=0.5, TurnRate=800,
+  cruisealt=180) at (200,200) facing +Z is ordered to (2200,200), a point due
+  +X — 90 degrees off its nose. The heading swings toward the bearing at the
+  800/frame clamp and snaps home; meanwhile the steering vector pulls the
+  velocity straight toward the target, so the craft never drifts in Z.
+seed: 1
+duration: 200
+units:
+  - alias: peep
+    type: armpeep
+    side: 0
+    pos: [200, 200]
+    heading: 0
+actions:
+  - at: 0
+    do: move
+    unit: peep
+    to: [2200, 200]
+checks:
+  - at: 10
+    unit: peep
+    observable: unit.heading
+    expect: 8000
+    label: turns at the turn-rate clamp
+    derivation: |
+      The bearing to a point due +X is the integer CORDIC atan2 of a pure +X
+      delta = 16385. The clamp adds TurnRate=800 angle-units per frame while
+      the error exceeds one step, so heading(10) = 10*800 = 8000.
+  - at: 20
+    unit: peep
+    observable: unit.heading
+    expect: 16000
+    label: still clamped, one step short of the bearing
+    derivation: |
+      heading(20) = 20*800 = 16000. The remaining error 16385-16000 = 385 is
+      under one 800-unit step, so the next frame snaps exactly onto 16385.
+  - at: 30
+    unit: peep
+    observable: unit.heading
+    expect: 16385
+    label: heading snaps onto the bearing and holds
+    derivation: |
+      Once |error| <= TurnRate the heading snaps to the bearing (16385) and,
+      the destination staying due +X, holds there. The turn is complete well
+      before frame 30.
+  - at: 120
+    unit: peep
+    observable: unit.pos_z
+    expect: 13107200
+    label: velocity tracks the target, no Z drift (the bank)
+    derivation: |
+      Start Z = 200 wu = 13107200 raw. The steering vector points the velocity
+      straight at the target (due +X) from the first frame — the flight
+      velocity is decoupled from the nose — so the craft never moves in Z. A
+      heading-locked integrator (velocity == nose) would instead fly partly +Z
+      while the nose rotates through 0..90 deg, growing pos_z; here it stays
+      pinned at 13107200.
+  - at: 199
+    unit: peep
+    observable: unit.dist_from_start
+    expect: 131032233
+    label: ARRIVES at the destination (step-5 sign)
+    derivation: |
+      Start (200,200), destination (2200,200): a 2000 wu run due +X. Cruising
+      at MaxVelocity the craft covers it and the arrival test completes the
+      order at the destination, leaving dist_from_start at 131032233 raw
+      (~1999.4 wu). A crawling port never arrives; >= 1900*65536 = 124518400
+      is the decisive floor and 131032233 clears it.

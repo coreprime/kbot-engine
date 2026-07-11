@@ -1061,7 +1061,7 @@ func (w *World) stepAircraftAttack(u *Unit) {
 			u.flybySide = -1
 		}
 	}
-	u.attackManeuver(ex, ez, rngF, bomberMode, passthrough)
+	w.attackManeuver(u, ex, ez, rngF, bomberMode, passthrough)
 	u.hasMove = false // the maneuver owns movement; don't double-drive in stepMovement
 
 	// Auto-arm slot 0 only for an autonomous unit pursuit — a force-fire slot is
@@ -1162,7 +1162,25 @@ func (w *World) stepMovement(u *Unit) {
 		return
 	}
 	wasMoving := u.IsMoving
-	if u.hasMove && u.Meta.CanMove {
+	if u.hasMove && u.Meta.CanMove && u.Meta.IsAircraft {
+		// Aircraft never touch the ground pathfinder: they fly the exact §6.1
+		// horizontal flight law straight at the destination, banking through
+		// their turn as their velocity leads or lags the nose.
+		goal := u.moveTarget
+		w.stepAirHorizontal(u, goal)
+		u.IsMoving = true
+		if arrivedFinal(&u.loco, goal) {
+			u.hasMove = false
+			u.airVel = fixed.Vec3{}
+			u.clearPath()
+			if u.curIsPatrol {
+				u.enqueue(queuedCommand{kind: order.KindPatrol, target: u.moveTarget})
+			}
+			if !u.hasAttack {
+				w.advanceQueue(u)
+			}
+		}
+	} else if u.hasMove && u.Meta.CanMove {
 		// Global path: a Move/Patrol/Build destination routes around terrain
 		// (spiral ramps, cliffs) and static structures via A* (pathfind.go);
 		// the unit walks its smoothed waypoints. Local avoidance below layers
@@ -1249,6 +1267,11 @@ func (w *World) stepMovement(u *Unit) {
 	} else {
 		u.IsMoving = false
 		u.loco.Speed = 0
+		if u.Meta.IsAircraft {
+			// Not flying under power: shed the flight velocity so a later order
+			// launches from rest, matching the airborne-only §6.1 velocity state.
+			u.airVel = fixed.Vec3{}
+		}
 	}
 
 	// Hard map border: the playable world is the loaded map's extent. Ground,
@@ -1467,6 +1490,9 @@ func (w *World) stepAltitude(u *Unit) {
 	} else {
 		u.PosY = fixed.Wrap32(cur + fixed.FromInt(diff.Sign()).Mul(slew))
 	}
+	// Feed the applied vertical move back into the flight velocity so the next
+	// frame's 3-D speed carries a live vertical component (the §6.1 vy axis).
+	u.airVel.Y = fixed.Wrap32(u.PosY - cur)
 }
 
 // padServiceRange is how close (wu) an idle aircraft must be to a friendly

@@ -13,22 +13,105 @@ const (
 	atkEgress
 )
 
-// Aircraft flight (locomotion spec §6.1 / §10.7). The VERTICAL axis now runs
-// the exact §6.1 law — the vy = clamp(targetY−posY, ±max(speed>>2, 1 wu/frame))
-// slew in stepAltitude. The HORIZONTAL flight below is still a behavioural
-// stand-in: the engine's §6.1 steering-acceleration-vector law (a =
-// 2·accel/max(distXZ, floor); desired = (target−pos)·a − v, clamped to |accel|)
-// caps the effective cruise at ~2·accel — far below maxvelocity — and the
-// decompile leaves its overspeed trim (UNKNOWN-5a) and steering sign/floor
-// unresolved, so a literal port crawls and never arrives. The stand-in keeps
-// the sandbox's flyable defaults/clamps on the per-frame speed axis, which
-// §10.7 accepts as broad-motion-compatible; air is not in the ground-fidelity
-// critical path.
+// Aircraft flight (locomotion spec §6.1). Both axes now run the exact §6.1
+// law. The VERTICAL slew — vy = clamp(targetY−posY, ±max(speed>>2, 1 wu/frame))
+// — lives in stepAltitude. The HORIZONTAL law is stepAirHorizontal below: a
+// per-frame drag toward top speed, an overspeed trim that re-points any speed
+// above the brake rate along the nose (the source of banked turns), the same
+// turn-rate heading clamp ground movers use, and a steering-acceleration
+// vector that pulls the flight velocity onto the aim point. It integrates a
+// true 3-D velocity that diverges from the heading while banking, unlike the
+// scalar-speed ground integrator.
+//
+// stepAirHorizontal runs one frame of the horizontal flight law, steering the
+// unit's flight velocity toward target and integrating position from it. The
+// caller owns the aim point (a move destination, or an attack maneuver's fly-by
+// geometry); this owns only the motion.
+func (w *World) stepAirHorizontal(u *Unit, target fixed.Vec2) {
+	m := u.Meta
+	if m == nil || m.MaxVelocity <= 0 {
+		return
+	}
+	v := &u.airVel
 
-// airMaxSpeed / airTurnPerFrame / airAccel / airBrake are the stand-in's
-// per-frame kinematics: raw FBI values with fallback defaults for aircraft
-// whose FBI omits them, accel/brake clamped into the stand-in's flyable band
-// (the old per-second [8,240] / [12,400] wu/s² windows, ÷900 onto wu/frame²).
+	// Step 1 — drag. Each frame the velocity loses the fraction accel/maxvel of
+	// itself, so under constant thrust (step 5 adds ~accel per frame) it settles
+	// at exactly maxvelocity. Applies to all three axes; the vertical is then
+	// overwritten by the altitude slew.
+	dragF := fixed.One - m.Accel.Div(m.MaxVelocity)
+	v.X = v.X.Mul(dragF)
+	v.Y = v.Y.Mul(dragF)
+	v.Z = v.Z.Mul(dragF)
+
+	// Step 2 — overspeed trim. Any horizontal speed beyond the brake rate is
+	// peeled off the current velocity direction and re-laid along the nose:
+	// keep brakerate worth along the old heading, re-point the excess forward.
+	// When velocity already tracks the nose this is a no-op; while turning it
+	// swings the velocity toward the heading a bank at a time.
+	hs := fixed.Vec2{X: v.X, Z: v.Z}.Len()
+	if hs > m.BrakeRate {
+		ratio := m.BrakeRate.Div(hs)
+		v.X = v.X.Mul(ratio)
+		v.Z = v.Z.Mul(ratio)
+		excess := hs - m.BrakeRate
+		sinH, cosH := headingVec(u.loco.Heading)
+		v.X += sinH.Mul(excess)
+		v.Z += cosH.Mul(excess)
+	}
+
+	// Step 3 (vertical slew) is stepAltitude, applied after the movement pass;
+	// it writes the vertical velocity back into airVel.Y.
+
+	// Step 4 — heading clamp. Turn toward the aim bearing at up to the unit's
+	// turn rate; the heading snaps to the bearing once the error fits one step.
+	d := target.Sub(u.loco.Pos)
+	bearing := fixed.Atan2(d.X, d.Z)
+	err := fixed.WrapAngle(bearing - int32(u.loco.Heading.Int()))
+	w.setTurnRate(u, err)
+
+	// Step 5 — steering acceleration. Pull the velocity onto the aim point with
+	// an acceleration whose direction is (pos−target)·(−gain) minus the current
+	// velocity, clamped to the unit's acceleration. The negative gain makes the
+	// position term point from the unit toward the target, so the craft arrives
+	// rather than crawling. The distance floors at 8 wu so the gain never blows
+	// up on top of the aim point.
+	dx := u.loco.Pos.X - target.X
+	dz := u.loco.Pos.Z - target.Z
+	dist := fixed.Max(fixed.Vec2{X: dx, Z: dz}.Len(), fixed.FromInt(8))
+	scale := -(m.Accel + m.Accel).Div(dist).Sqrt()
+	// The velocity-match term is (v − targetVel); a fixed-point (move-order) aim
+	// is static, so targetVel is zero. Chasing a moving unit would subtract its
+	// velocity here — a lead term the disassembly leaves unresolved, so it stays
+	// zero until that getter is recovered.
+	ax := dx.Mul(scale) - v.X
+	az := dz.Mul(scale) - v.Z
+	if mag := (fixed.Vec2{X: ax, Z: az}).Len(); mag > m.Accel {
+		ax = ax.Mul(m.Accel).Div(mag)
+		az = az.Mul(m.Accel).Div(mag)
+	}
+	v.X += ax
+	v.Z += az
+
+	// Scalar speed is the full 3-D velocity magnitude (the vertical component is
+	// last frame's slew, refreshed by stepAltitude after this pass). Position
+	// integrates straight off the horizontal velocity — no nose decomposition,
+	// since the velocity already carries its own direction.
+	u.loco.Speed = fixed.Wrap32(hs3(v.X, v.Y, v.Z))
+	u.loco.Pos.X = fixed.Wrap32(u.loco.Pos.X + v.X)
+	u.loco.Pos.Z = fixed.Wrap32(u.loco.Pos.Z + v.Z)
+}
+
+// hs3 is the length of a 3-D vector, computed as the hypotenuse of the
+// horizontal length and the vertical component so it reuses the 2-D helper.
+func hs3(x, y, z fixed.Fixed) fixed.Fixed {
+	return fixed.Hypot(fixed.Hypot(x, z), y)
+}
+
+// airMaxSpeed and airTurnPerFrame are the raw per-frame kinematics the hover
+// gunship's strafe arc still steps against — its facing is decoupled from its
+// motion (nose on the target while sliding around a standoff arc), a geometry
+// the single-aim-point flight law does not express — with fallback defaults
+// for aircraft whose FBI omits the stat.
 func airMaxSpeed(m *UnitMeta) fixed.Fixed {
 	if m.MaxVelocity > 0 {
 		return m.MaxVelocity
@@ -43,26 +126,6 @@ func airTurnPerFrame(m *UnitMeta) fixed.Fixed {
 	return fixed.FromInt(600)
 }
 
-func airAccel(m *UnitMeta) fixed.Fixed {
-	a := m.Accel
-	if a <= 0 {
-		a = fixed.FromInt(1).Div(fixed.FromInt(20))
-	}
-	return fixed.Clamp(a,
-		fixed.FromInt(8).Div(fixed.FromInt(900)),
-		fixed.FromInt(240).Div(fixed.FromInt(900)))
-}
-
-func airBrake(m *UnitMeta) fixed.Fixed {
-	b := m.BrakeRate
-	if b <= 0 {
-		b = fixed.FromInt(1).Div(fixed.FromInt(10))
-	}
-	return fixed.Clamp(b,
-		fixed.FromInt(12).Div(fixed.FromInt(900)),
-		fixed.FromInt(400).Div(fixed.FromInt(900)))
-}
-
 // turnToward rotates the heading toward want (a TA-angle) at the unit's FBI
 // turn rate, never snapping past it.
 func turnToward(st *locoState, want fixed.Fixed, m *UnitMeta) {
@@ -75,20 +138,20 @@ func turnToward(st *locoState, want fixed.Fixed, m *UnitMeta) {
 	}
 }
 
-// flyForward turns toward want and drives forward along the heading at the
-// unit's (ramped) max speed — the "always flying" motion fixed-wing aircraft
-// and closing gunships use.
-func flyForward(st *locoState, want fixed.Fixed, m *UnitMeta) {
-	turnToward(st, want, m)
-	target := airMaxSpeed(m)
-	s := st.Speed
-	if s < target {
-		s = fixed.Min(target, s+airAccel(m))
-	} else {
-		s = fixed.Max(target, s-airBrake(m))
+// flyForwardAir drives the unit forward along the want heading using the exact
+// §6.1 horizontal flight law: it aims the steering law at a far point straight
+// ahead along want, so the craft turns onto that heading and cruises up to
+// MaxVelocity. The maneuver planner owns want (the fly-by / egress / drop-line
+// direction); this owns only the motion.
+func (w *World) flyForwardAir(u *Unit, want fixed.Fixed) {
+	sin, cos := headingVec(want)
+	const farAhead = 4000 // wu; well beyond any standoff so the aim stays ahead
+	far := fixed.FromInt(farAhead)
+	aim := fixed.Vec2{
+		X: fixed.Wrap32(u.loco.Pos.X + sin.Mul(far)),
+		Z: fixed.Wrap32(u.loco.Pos.Z + cos.Mul(far)),
 	}
-	st.Speed = fixed.Wrap32(s)
-	st.advance(s)
+	w.stepAirHorizontal(u, aim)
 }
 
 // attackManeuver flies an aircraft's attack pattern around the engagement at
@@ -103,7 +166,7 @@ func flyForward(st *locoState, want fixed.Fixed, m *UnitMeta) {
 //     A bomber (bomberMode) holds heading through the drop window so its bomb
 //     string lays on a straight line, banking away only once it has cleared the
 //     far edge (target + passthrough).
-func (u *Unit) attackManeuver(tx, tz, rangeF fixed.Fixed, bomberMode bool, passthrough fixed.Fixed) {
+func (w *World) attackManeuver(u *Unit, tx, tz, rangeF fixed.Fixed, bomberMode bool, passthrough fixed.Fixed) {
 	st := &u.loco
 	dx := tx - st.Pos.X
 	dz := tz - st.Pos.Z
@@ -115,7 +178,7 @@ func (u *Unit) attackManeuver(tx, tz, rangeF fixed.Fixed, bomberMode bool, passt
 		if dist > rangeF {
 			// Out of range — close in head-on.
 			u.atkPhase = atkApproach
-			flyForward(st, bearing, u.Meta)
+			w.flyForwardAir(u, bearing)
 			return
 		}
 		// In range — strafe an arc around the target, nose always on it.
@@ -160,7 +223,7 @@ func (u *Unit) attackManeuver(tx, tz, rangeF fixed.Fixed, bomberMode bool, passt
 		if bomberMode && dist <= passthrough {
 			want = st.Heading
 		}
-		flyForward(st, want, u.Meta)
+		w.flyForwardAir(u, want)
 		// Past-target test: forward . (target - pos) negative => crossed the aim
 		// point. Bombers also wait until clear of the far drop-zone edge.
 		sinH, cosH := headingVec(st.Heading)
@@ -190,7 +253,7 @@ func (u *Unit) attackManeuver(tx, tz, rangeF fixed.Fixed, bomberMode bool, passt
 	// Egress: fly to the turn-around point, then come back for another run.
 	ex := u.egX - st.Pos.X
 	ez := u.egZ - st.Pos.Z
-	flyForward(st, fixed.FromInt(int(fixed.Atan2(ex, ez))), u.Meta)
+	w.flyForwardAir(u, fixed.FromInt(int(fixed.Atan2(ex, ez))))
 	if (fixed.Vec2{X: ex, Z: ez}).Len() < fixed.FromInt(40) {
 		u.atkPhase = atkApproach
 	}
