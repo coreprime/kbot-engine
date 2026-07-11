@@ -2240,6 +2240,26 @@ func (w *World) stopUnit(id uint32) {
 
 // ApplyDamage subtracts dmg from target HP, emitting hit and (on lethal) death.
 func (w *World) ApplyDamage(sourceID, targetID uint32, dmg fixed.Fixed) bool {
+	return w.applyDamageReason(sourceID, targetID, dmg, 0)
+}
+
+// destroySuppressed removes a unit without the death ladder: no Killed script,
+// no wreck, no explodeas blast — just a reason-stamped death event so the
+// client dismisses the body. This is the destroy half a capture/give-away
+// (reason 4) or a reclaim (reason 5) runs, where a wreck or detonation would be
+// wrong (the reclaimer already salvaged the mass; the captor kept the hull).
+func (w *World) destroySuppressed(t *Unit, reason int) {
+	t.Health = 0
+	t.Dead = true
+	w.emit(frame.Event{Kind: frame.EvDeath, UnitID: t.ID, Anchor: t.Pos(), SfxType: reason})
+	w.RemoveUnit(t.ID)
+}
+
+// applyDamageReason is ApplyDamage with an explicit death reason. reason 0 is
+// ordinary combat (the lethal blow runs the full Killed/wreck/blast ladder);
+// a wreck-suppressing reason (reclaim) instead dismantles the target cleanly on
+// the lethal pulse — no wreck, no detonation, no kill credit.
+func (w *World) applyDamageReason(sourceID, targetID uint32, dmg fixed.Fixed, reason int) bool {
 	t := w.units[targetID]
 	if t == nil || t.Dead || t.carriedBy != 0 {
 		return false
@@ -2252,6 +2272,10 @@ func (w *World) ApplyDamage(sourceID, targetID uint32, dmg fixed.Fixed) bool {
 		if t.buildHP < 1 {
 			t.provokedMs = w.simMs
 			w.emit(frame.Event{Kind: frame.EvHit, UnitID: sourceID, TargetID: targetID})
+			if reason != 0 {
+				w.destroySuppressed(t, reason)
+				return true
+			}
 			w.killUnit(t, 100, Blast{})
 			return true
 		}
@@ -2278,6 +2302,13 @@ func (w *World) ApplyDamage(sourceID, targetID uint32, dmg fixed.Fixed) bool {
 	t.provokedMs = w.simMs
 	w.emit(frame.Event{Kind: frame.EvHit, UnitID: sourceID, TargetID: targetID})
 	if t.Health <= 0 {
+		// A wreck-suppressing reason (reclaim) dismantles the target rather than
+		// killing it: no wreck, no explodeas blast, and no kill credit — the
+		// reclaimer salvaged the mass, it did not destroy the unit.
+		if reason != 0 {
+			w.destroySuppressed(t, reason)
+			return true
+		}
 		// Kill credit: the attacker delivering the lethal blow earns a kill
 		// (and the victim's experience value) when the victim was an enemy
 		// and fully built — the counters every veterancy consumer reads.

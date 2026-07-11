@@ -399,7 +399,9 @@ func (w *World) stepReclaim(u *Unit) {
 func (w *World) reclaimDamage(sourceID uint32, t *Unit, chunk int) bool {
 	buildFrac := float64(t.buildRem) // 0 = complete, 1 = fresh frame
 	metalGain := (1 - buildFrac) * float64(t.Meta.Econ.BuildCostMetal)
-	dead := w.ApplyDamage(sourceID, t.ID, fixed.FromInt(chunk))
+	// Reason 5 so the lethal pulse dismantles the target cleanly — no wreck, no
+	// death blast — instead of routing through the ordinary kill ladder.
+	dead := w.applyDamageReason(sourceID, t.ID, fixed.FromInt(chunk), deathReasonReclaimed)
 	if dead {
 		if src := w.units[sourceID]; src != nil && metalGain > 0 {
 			w.creditMetal(src.Side, float32(metalGain))
@@ -427,10 +429,7 @@ func (w *World) transferOwnership(t *Unit, newSide int, reason int) {
 	}
 	// Destroy the original directly (no wreck, no death blast — the
 	// suppressing reason path); a plain death event marks the removal.
-	t.Health = 0
-	t.Dead = true
-	w.emit(frame.Event{Kind: frame.EvDeath, UnitID: t.ID, Anchor: t.Pos(), SfxType: reason})
-	w.RemoveUnit(t.ID)
+	w.destroySuppressed(t, reason)
 	// Respawn under the new owner with the preserved state (kills/xp NOT
 	// copied — a fresh body loses its veterancy).
 	id := w.addUnit(name, meta, binding, pos, heading, newSide, true)
