@@ -68,3 +68,29 @@ The wasm binary is generated from the repo's Go code and is not committed:
 
 The studio's own copy is built separately by `task build-wasm` at the repo
 root; the two are the same Go program.
+
+## Sandbox parity harness
+
+`sandboxverify/` grades the sim against the canonical mechanics specifications.
+A scenario file (`scenarios/sandbox/*.yaml`) declares a tiny world built from
+real game data, a run length, and named observables sampled at spec-time ticks
+and compared against hand-derived expected values. The harness measures
+divergence — it never adjusts the sim to pass. The full matrix is 38 scenarios
+/ 91 checks (all faithful).
+
+There are two entry points:
+
+- **CI golden gate — no game install.** `TestParityCISubset` builds a 13-scenario
+  subset (27 checks, spanning locomotion / economy / combat / specials) from a
+  minimal fixture tree committed under `sandboxverify/testdata/fixtures/ta`
+  (the real `armflash` and `armmex` FBI + COB, the `TANKSH2` movement class,
+  and the `EMG` weapon). It grades them tick-exact and asserts the result
+  matches `sandboxverify/golden/ci-subset.json` byte-for-byte, so any engine
+  change that shifts a simulated value on a covered mechanic fails CI with zero
+  game assets on the runner. Regenerate the golden after an intended change with
+  `UPDATE_GOLDEN=1 go test ./sandboxverify/...` and review the diff.
+- **Full matrix — local only.** `TestParityFull` and the `cmd/sandbox-verify`
+  CLI run all 38 scenarios against a real flattened install
+  (`$TA_UNPACKED_PATH` / `$TAK_UNPACKED_PATH`). With `ALLOW_SKIP_ASSETS=true`
+  (the CI setting) the full test skips cleanly; locally with the roots set it
+  reports the complete 91-check gap matrix.

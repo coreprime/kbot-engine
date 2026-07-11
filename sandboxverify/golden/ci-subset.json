@@ -1,0 +1,390 @@
+[
+  {
+    "name": "ta-combat-spray",
+    "game": "ta",
+    "system": "combat",
+    "checks": [
+      {
+        "label": "three pellets draw three spray values",
+        "observable": "world.rng_draws",
+        "specTick": 40,
+        "simTick": 40,
+        "skewMs": 0,
+        "expect": 5,
+        "actual": 5,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "stop order pins the scenario to one trigger pull",
+        "observable": "unit.fire_count",
+        "specTick": 40,
+        "simTick": 40,
+        "skewMs": 0,
+        "expect": 1,
+        "actual": 1,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "parent and pellets are all gone",
+        "observable": "world.projectiles",
+        "specTick": 40,
+        "simTick": 40,
+        "skewMs": 0,
+        "expect": 0,
+        "actual": 0,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-econ-energy-stall-mex",
+    "game": "ta",
+    "system": "economy",
+    "checks": [
+      {
+        "label": "extraction frozen after one settle by the energy stall",
+        "observable": "side.metal",
+        "specTick": 125,
+        "simTick": 125,
+        "skewMs": 0,
+        "expect": 24182,
+        "actual": 24182,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "gross income is exactly one settle's yield",
+        "observable": "side.metal_produced",
+        "specTick": 125,
+        "simTick": 125,
+        "skewMs": 0,
+        "expect": 24182,
+        "actual": 24182,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-econ-mex-income",
+    "game": "ta",
+    "system": "economy",
+    "checks": [
+      {
+        "label": "extractor yield over ten settles",
+        "observable": "side.metal",
+        "specTick": 305,
+        "simTick": 305,
+        "skewMs": 0,
+        "expect": 241827,
+        "actual": 241827,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "extractor energy demand over ten settles",
+        "observable": "side.energy",
+        "specTick": 305,
+        "simTick": 305,
+        "skewMs": 0,
+        "expect": -1966080,
+        "actual": -1966080,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-econ-storage-cap",
+    "game": "ta",
+    "system": "economy",
+    "checks": [
+      {
+        "label": "metal stock pinned at the storage cap",
+        "observable": "side.metal",
+        "specTick": 305,
+        "simTick": 305,
+        "skewMs": 0,
+        "expect": 13107200,
+        "actual": 13107200,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "gross income still metered though wasted",
+        "observable": "side.metal_produced",
+        "specTick": 305,
+        "simTick": 305,
+        "skewMs": 0,
+        "expect": 241827,
+        "actual": 241827,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-accel",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "speed after 10 frames of thrust",
+        "observable": "unit.speed",
+        "specTick": 10,
+        "simTick": 10,
+        "skewMs": 0,
+        "expect": 11140,
+        "actual": 11140,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "distance covered in 10 frames",
+        "observable": "unit.dist_from_start",
+        "specTick": 10,
+        "simTick": 10,
+        "skewMs": 0,
+        "expect": 61270,
+        "actual": 61270,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "top speed reached at frame 118",
+        "observable": "unit.speed",
+        "specTick": 118,
+        "simTick": 118,
+        "skewMs": 0,
+        "expect": 131072,
+        "actual": 131072,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-brake",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "one frame after stop order",
+        "observable": "unit.speed",
+        "specTick": 151,
+        "simTick": 151,
+        "skewMs": 0,
+        "expect": 128452,
+        "actual": 128452,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "51 frames into the brake ramp",
+        "observable": "unit.speed",
+        "specTick": 200,
+        "simTick": 200,
+        "skewMs": 0,
+        "expect": 64262,
+        "actual": 64262,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "stationary within 102 frames of braking",
+        "observable": "unit.speed",
+        "specTick": 251,
+        "simTick": 251,
+        "skewMs": 0,
+        "expect": 0,
+        "actual": 0,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-brake-decision",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "still at full speed one frame before the brake point",
+        "observable": "unit.speed",
+        "specTick": 309,
+        "simTick": 309,
+        "skewMs": 0,
+        "expect": 131072,
+        "actual": 131072,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "first braking frame lands exactly at the spec boundary",
+        "observable": "unit.speed",
+        "specTick": 310,
+        "simTick": 310,
+        "skewMs": 0,
+        "expect": 129762,
+        "actual": 129762,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "brake ramp holds (no accel chatter)",
+        "observable": "unit.speed",
+        "specTick": 312,
+        "simTick": 312,
+        "skewMs": 0,
+        "expect": 127142,
+        "actual": 127142,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-moveinfo-slope",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "class-legal climb capped on pitch band +3",
+        "observable": "unit.speed",
+        "specTick": 150,
+        "simTick": 150,
+        "skewMs": 0,
+        "expect": 32768,
+        "actual": 32768,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-slope",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "steady climb speed on pitch band +2",
+        "observable": "unit.speed",
+        "specTick": 200,
+        "simTick": 200,
+        "skewMs": 0,
+        "expect": 65536,
+        "actual": 65536,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-turn",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "mid-turn heading (rate-saturated)",
+        "observable": "unit.heading",
+        "specTick": 20,
+        "simTick": 20,
+        "skewMs": 0,
+        "expect": 9500,
+        "actual": 9500,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "heading at the 1-second boundary",
+        "observable": "unit.heading",
+        "specTick": 30,
+        "simTick": 30,
+        "skewMs": 0,
+        "expect": 14250,
+        "actual": 14250,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-turn-thrust",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "full-rate turn while the error is saturated",
+        "observable": "unit.heading",
+        "specTick": 20,
+        "simTick": 20,
+        "skewMs": 0,
+        "expect": 9500,
+        "actual": 9500,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "full thrust while turning hard",
+        "observable": "unit.speed",
+        "specTick": 30,
+        "simTick": 30,
+        "skewMs": 0,
+        "expect": 33420,
+        "actual": 33420,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-loco-underwater",
+    "game": "ta",
+    "system": "locomotion",
+    "checks": [
+      {
+        "label": "half-speed cap while submerged",
+        "observable": "unit.speed",
+        "specTick": 100,
+        "simTick": 100,
+        "skewMs": 0,
+        "expect": 65536,
+        "actual": 65536,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  },
+  {
+    "name": "ta-paralyze-cap",
+    "game": "ta",
+    "system": "specials",
+    "checks": [
+      {
+        "label": "accumulator clamps to the 1800-tick cap",
+        "observable": "unit.paralyze_ticks",
+        "specTick": 0,
+        "simTick": 0,
+        "skewMs": 0,
+        "expect": 1800,
+        "actual": 1800,
+        "delta": 0,
+        "verdict": "faithful"
+      },
+      {
+        "label": "accumulator decays one per tick",
+        "observable": "unit.paralyze_ticks",
+        "specTick": 50,
+        "simTick": 50,
+        "skewMs": 0,
+        "expect": 1750,
+        "actual": 1750,
+        "delta": 0,
+        "verdict": "faithful"
+      }
+    ]
+  }
+]

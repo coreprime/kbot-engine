@@ -1,0 +1,40 @@
+[EMG]
+	{
+	ID=16;
+	name=E.M.G.;
+	rendertype=4;	/* 2D bitmap */
+	color=2;		/* EMG bitmap shell, its a hack */
+	lineofsight=1;
+	turret=1;
+
+//	model=plasma;
+
+	range=180;
+	reloadtime=.4;
+	weapontimer=1;
+	weaponvelocity=300;
+	sprayangle=1024;
+	areaofeffect=8;
+	burst=3;
+	burstrate=.1;
+	soundstart=armsml2;
+	soundhit=lasrhit1;
+	soundtrigger=1;
+	tolerance=6000;
+
+	startsmoke=1;
+
+	explosiongaf=fx;
+	explosionart=explode5;
+
+	waterexplosiongaf=fx;
+	waterexplosionart=h2oboom1;
+
+	lavaexplosiongaf=fx;
+	lavaexplosionart=lavasplashsm;
+
+	[DAMAGE]
+		{
+		default=8;
+		}
+	}

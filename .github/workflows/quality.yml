@@ -35,3 +35,37 @@ jobs:
 
       - name: Test
         run: npm test
+
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
+
+      # The parity gate runs the whole Go suite with ALLOW_SKIP_ASSETS=true so
+      # the tests that need a real game install skip cleanly on the CI runner,
+      # while the install-free sandbox golden gate (TestParityCISubset, built
+      # from the committed fixtures under sandboxverify/testdata) still runs and
+      # fails the build if the sim drifts on any covered mechanic.
+      - name: Go tests + sandbox parity golden
+        run: go test ./...
+        env:
+          ALLOW_SKIP_ASSETS: "true"
