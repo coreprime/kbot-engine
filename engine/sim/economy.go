@@ -58,6 +58,37 @@ const taStorageFloor = 200
 // engine's 8-digit decimal literal 0.03333333 (bits 0x3FA11110F46EFD39).
 var takTickScale = math.Float64frombits(0x3FA11110F46EFD39)
 
+// Single-player AI difficulty settings (economy.md §1.6, the 0/1/2 Difficulty
+// value). They select the production income handicap an AI side's credits are
+// scaled by.
+const (
+	DifficultyEasy   = 0
+	DifficultyMedium = 1
+	DifficultyHard   = 2
+)
+
+// aiIncomeMulEasy / aiIncomeMulMedium are the exact difficulty multiplier
+// doubles the engines apply to an AI player's production (Easy ×0.5, Medium
+// ×0.7; Hard is unscaled). Bit patterns per economy.md §1.6.
+var (
+	aiIncomeMulEasy   = math.Float64frombits(0x3FE0000000000000) // 0.5
+	aiIncomeMulMedium = math.Float64frombits(0x3FE6666666666666) // 0.7
+)
+
+// difficultyIncomeMul maps a difficulty setting to its production multiplier.
+// Any value other than Easy/Medium (Hard, or an out-of-range setting) is
+// unscaled.
+func difficultyIncomeMul(diff int) float64 {
+	switch diff {
+	case DifficultyEasy:
+		return aiIncomeMulEasy
+	case DifficultyMedium:
+		return aiIncomeMulMedium
+	default:
+		return 1
+	}
+}
+
 // econAxis is one axis of a TA unit's econ slot: production credited this
 // settle window, consumption requested/granted this window, and the stall
 // carryover — unmet demand from previous windows. carry > 0 means the unit
@@ -278,6 +309,16 @@ func (w *World) settleTA() {
 		p := &w.econTA[side]
 		if !p.seeded {
 			continue
+		}
+		// Single-player AI handicap: an AI side's whole production credit is
+		// scaled by the difficulty multiplier (economy.md §1.6 — Easy ×0.5,
+		// Medium ×0.7, Hard ×1.0), so the credited income, the published rate
+		// and the lifetime produced all shrink together. Human sides keep the
+		// 1.0 default and are never scaled. Received transfers land in this
+		// same production sum and are scaled with it.
+		if m := w.aiMul[side]; m != 1 {
+			prodE[side] *= m
+			prodM[side] *= m
 		}
 		p.incomeE, p.expenseE = f32(prodE[side]), f32(reqE[side])
 		p.incomeM, p.expenseM = f32(prodM[side]), f32(reqM[side])

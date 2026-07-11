@@ -224,6 +224,7 @@ func buildWorld(sc *Scenario, root string) (*runState, error) {
 		Seed: sc.Seed, Spawn: spawn, Rand: rt.Rand(), Economy: econ,
 		StartMetal: startM, StartEnergy: startE,
 		MinWind: int32(sc.MinWind), MaxWind: int32(sc.MaxWind),
+		AIDifficulty: aiDifficulty(sc.AIDifficulty),
 	})
 	if t := makeTerrain(sc.Terrain); t != nil {
 		w.SetTerrain(t)
@@ -356,6 +357,27 @@ func (st *runState) observe() {
 			delete(st.pendingSpawns, u.Name)
 		}
 	}
+}
+
+// aiDifficulty maps a scenario's side -> difficulty-name table onto the
+// engine's side -> difficulty-setting config. Unknown names default to hard
+// (unscaled), so a typo scales nothing rather than silently halving income.
+func aiDifficulty(m map[int]string) map[int]int {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[int]int, len(m))
+	for side, name := range m {
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "easy":
+			out[side] = sim.DifficultyEasy
+		case "medium":
+			out[side] = sim.DifficultyMedium
+		default:
+			out[side] = sim.DifficultyHard
+		}
+	}
+	return out
 }
 
 func vec2(to []int) fixed.Vec2 {

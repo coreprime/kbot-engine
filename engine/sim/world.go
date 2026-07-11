@@ -478,6 +478,11 @@ type World struct {
 	econTAK     [maxSides]sideEconTAK
 	resSpent    [maxSides]resourceTally
 	resRate     [maxSides]resourceTally
+	// aiMul is each side's production income multiplier: 1.0 for a human
+	// player, the single-player AI difficulty handicap (0.5/0.7/1.0) for an AI
+	// side (economy.md §1.6). Applied to the summed production at each TA
+	// settle.
+	aiMul [maxSides]float64
 
 	// terrain is the installed map height field (nil = flat sandbox grid).
 	// Configuration like meta, identical on every peer, never hashed.
@@ -565,6 +570,12 @@ type Config struct {
 	// whose monarch dies loses every remaining unit (specials.md §7.3).
 	MonarchDeath bool
 
+	// AIDifficulty marks sides as single-player AI and scales their production
+	// income by the difficulty handicap (economy.md §1.6): DifficultyEasy ×0.5,
+	// DifficultyMedium ×0.7, DifficultyHard ×1.0. A side absent from the map is
+	// a human player, never scaled.
+	AIDifficulty map[int]int
+
 	// MinWind / MaxWind bound the ambient wind speed the world re-rolls (the
 	// OTA/TNT minwindspeed/maxwindspeed pair; world.md §1.8). Both zero leaves
 	// the world calm. The re-roll interval is drawn from the CRT stream and the
@@ -611,7 +622,7 @@ func New(cfg Config) *World {
 	case se < 0:
 		se = 0
 	}
-	return &World{
+	w := &World{
 		units:         make(map[uint32]*Unit),
 		features:      make(map[uint32]*Feature),
 		nextID:        1,
@@ -627,6 +638,17 @@ func New(cfg Config) *World {
 		monarchDeath:  cfg.MonarchDeath,
 		wind:          windState{minWind: cfg.MinWind, maxWind: cfg.MaxWind},
 	}
+	// Every side is a human player (income multiplier 1.0) unless the config
+	// marks it as an AI at a difficulty.
+	for i := range w.aiMul {
+		w.aiMul[i] = 1
+	}
+	for side, diff := range cfg.AIDifficulty {
+		if side >= 0 && side < maxSides {
+			w.aiMul[side] = difficultyIncomeMul(diff)
+		}
+	}
+	return w
 }
 
 // Tick returns the current simulation tick number.

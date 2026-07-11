@@ -1,0 +1,51 @@
+# TA single-player AI difficulty income handicap: an AI side's production is
+# scaled by the difficulty multiplier (Easy x0.5), while a human side is never
+# scaled. Two identical fusion plants, one per side, make the halving directly
+# visible in the lifetime energy produced.
+# Ground truth: economy.md §1.6 (AI difficulty income multiplier).
+name: ta-econ-ai-difficulty
+game: ta
+system: economy
+spec: economy.md §1.6
+description: >-
+  An ARMFUS (EnergyMake=1000, ActivateWhenBuilt) on side 0 (marked Easy AI) and
+  an identical ARMFUS on side 1 (human). The AI side's production is scaled x0.5
+  before it is credited, so over ten settles side 0 produces half what side 1
+  does.
+seed: 1
+duration: 310
+start_energy: -1
+ai_difficulty:
+  0: easy
+units:
+  - alias: fus_ai
+    type: armfus
+    side: 0
+    pos: [200, 200]
+    heading: 0
+  - alias: fus_human
+    type: armfus
+    side: 1
+    pos: [400, 400]
+    heading: 0
+checks:
+  - at: 305
+    side: 0
+    observable: side.energy_produced
+    expect: 327680000
+    label: AI side production halved (Easy x0.5)
+    derivation: |
+      ARMFUS makes 1000 energy per settle (passive EnergyMake). Side 0 is an
+      Easy AI, so each settle's production is scaled by 0.5 -> 500 credited.
+      Ten settles (frames 30..300): lifetime produced = 10 * 500 = 5000. Raw
+      fixed.FromFloat(5000) = 5000 * 65536 = 327680000.
+    missing_if_zero: true
+  - at: 305
+    side: 1
+    observable: side.energy_produced
+    expect: 655360000
+    label: human side production unscaled
+    derivation: |
+      Side 1 is a human player, never scaled: 1000 energy per settle, ten
+      settles = 10000 produced. Raw 10000 * 65536 = 655360000. The 2:1 ratio
+      to side 0 is the Easy handicap.

@@ -54,6 +54,10 @@ type Scenario struct {
 	// speed with no MINSTD speed draw.
 	MinWind int `yaml:"min_wind"`
 	MaxWind int `yaml:"max_wind"`
+	// AIDifficulty marks sides as single-player AI at a difficulty (economy.md
+	// §1.6), scaling their production income: "easy" ×0.5, "medium" ×0.7,
+	// "hard" ×1.0. A side absent from the map is a human player, never scaled.
+	AIDifficulty map[int]string `yaml:"ai_difficulty"`
 
 	Terrain *TerrainSpec `yaml:"terrain"`
 	Units   []UnitSpec   `yaml:"units"`
