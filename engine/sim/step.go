@@ -1177,7 +1177,10 @@ func (w *World) stepMovement(u *Unit) {
 		// horizontal flight law straight at the destination, banking through
 		// their turn as their velocity leads or lags the nose.
 		goal := u.moveTarget
-		w.stepAirHorizontal(u, goal)
+		// A move destination is a static point goal: it carries no velocity, so
+		// the steering law's velocity-match term is zero. This is the exact
+		// point-order path the air-cruise / air-turn scenarios pin.
+		w.stepAirHorizontal(u, goal, fixed.Vec2{})
 		u.IsMoving = true
 		if arrivedFinal(&u.loco, goal) {
 			u.hasMove = false

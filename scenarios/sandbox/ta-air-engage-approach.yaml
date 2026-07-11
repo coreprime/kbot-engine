@@ -1,0 +1,102 @@
+# TA aircraft attack-approach flight: an ARM Freedom Fighter ordered to engage a
+# distant, unarmed scout flies the exact §6.1 horizontal flight law down the
+# engage motion path (the attack maneuver's fly-forward integrator), distinct
+# from the point-order move path the cruise/turn scenarios cover. The engage
+# path seeds the aircraft's OWN fly-through velocity (nose direction at cruise
+# speed) as the steering law's velocity-match target, so a craft closing on its
+# aim keeps its speed instead of braking onto it. Down a long straight approach
+# the far aim saturates the steering law's acceleration clamp, so this cruise
+# matches the point-order cruise to the raw integer — the velocity-match term's
+# distinct near-aim fly-through is locked by the unit test, not observable here;
+# what this scenario pins is that the engage flight path itself runs the faithful
+# §6.1 law (climb, nose-aligned cruise at MaxVelocity, ground covered).
+# Ground truth: locomotion spec §6.1 (aircraft horizontal flight law).
+name: ta-air-engage-approach
+game: ta
+system: locomotion
+spec: locomotion.md §6.1
+description: >-
+  ARMFIG (Freedom Fighter: MaxVelocity=10, BrakeRate=6, Acceleration=0.35,
+  TurnRate=512, cruisealt=110) at (200,200) facing +Z is ordered to attack an
+  unarmed ARMPEEP parked far ahead at (200,4000). The fighter flies the engage
+  approach straight up +Z: it climbs to cruise altitude, holds MaxVelocity
+  nose-aligned, and covers the ground toward its prey.
+seed: 1
+duration: 200
+units:
+  - alias: fig
+    type: armfig
+    side: 0
+    pos: [200, 200]
+    heading: 0
+  - alias: prey
+    type: armpeep
+    side: 1
+    pos: [200, 4000]
+    heading: 0
+actions:
+  - at: 0
+    do: attack
+    unit: fig
+    target: prey
+checks:
+  - at: 40
+    unit: fig
+    observable: unit.pos_y
+    expect: 3596708
+    label: climbs toward cruise on the approach
+    derivation: |
+      Units spawn on the ground (PosY 0) and the sandbox grid has ground
+      height 0, so the cruise target is 0 + cruisealt = 110 wu. The vertical
+      slew is max(speed>>2, 1 wu/frame) (§6.1 step 3), ramping from 1 wu/frame
+      at rest as horizontal speed builds. Integrating that ramp for 40 frames
+      lands PosY at 3596708 raw (~54.9 wu) — the climb is well underway, half
+      way to the 110 wu ceiling, proving the engaged fighter leaves the ground.
+  - at: 120
+    unit: fig
+    observable: unit.pos_y
+    expect: 7208960
+    label: reaches and holds cruise altitude
+    derivation: |
+      Cruise altitude = ground + cruisealt = 0 + 110 wu = 110*65536 = 7208960
+      raw. The climb completes well before frame 120 and PosY then pins to the
+      target every frame (altitude error 0), so at frame 120 it sits exactly on
+      7208960.
+  - at: 120
+    unit: fig
+    observable: unit.speed
+    expect: 646244
+    label: cruises at MaxVelocity down the approach
+    derivation: |
+      Drag removes accel/maxvel = 0.35/10 of the velocity each frame; the
+      steering vector adds ~Acceleration (0.35 wu/frame) along the flight
+      direction, so the fixed point of v*(1 - 0.35/10) + 0.35 is v = 10 wu/frame
+      = 655360 raw. By frame 120 the 16.16 iteration cruises in the settled band
+      just under that ideal, sampling 646244 raw (~9.86 wu). The engage path
+      seeds the fighter's own nose*MaxVelocity as the velocity-match target, but
+      down this far-aim approach the steering vector saturates the acceleration
+      clamp, which absorbs the match term, so this equals the point-order cruise
+      integer — the term's distinct near-aim fly-through is gated by the
+      aircraft-flight unit test, not here.
+  - at: 120
+    unit: fig
+    observable: unit.heading
+    expect: 1
+    label: velocity stays nose-aligned up the approach
+    derivation: |
+      The prey is dead ahead on +Z. The heading tracks the bearing to it, which
+      the integer CORDIC atan2 quantizes to 1 angle-unit for a pure +Z delta
+      rather than an exact 0 (~0.005deg, nose on +Z). It holds that value: the
+      fighter flies straight up its approach, never spinning up a spurious turn.
+  - at: 150
+    unit: fig
+    observable: unit.dist_from_start
+    expect: 80320744
+    label: covers ground toward the prey (engage flight path lives)
+    derivation: |
+      Start (200,200), prey (200,4000): a 3800 wu straight approach the fighter
+      never finishes inside 200 frames (cruise ~10 wu/frame reaches ~1500 wu by
+      the run's end), so it stays in the clean straight-approach phase the whole
+      window. Climbing off the line then cruising ~9.8 wu/frame covers 80320744
+      raw (~1225.6 wu) by frame 150 — the engage flight path integrates the
+      §6.1 law and actually flies, rather than stalling on the spot.

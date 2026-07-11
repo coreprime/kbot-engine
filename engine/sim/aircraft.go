@@ -26,8 +26,17 @@ const (
 // stepAirHorizontal runs one frame of the horizontal flight law, steering the
 // unit's flight velocity toward target and integrating position from it. The
 // caller owns the aim point (a move destination, or an attack maneuver's fly-by
-// geometry); this owns only the motion.
-func (w *World) stepAirHorizontal(u *Unit, target fixed.Vec2) {
+// geometry) AND the aim velocity; this owns only the motion.
+//
+// targetVel is the dead-reckon velocity the steering law matches to in step 5 —
+// the velocity the aim point is itself carrying. A stationary aim (a move
+// destination) carries none, so callers on that path pass a zero vector and the
+// term reduces to plain velocity damping, the exact behaviour the point-order
+// scenarios pin. An engaging aircraft's motion goal instead carries its own
+// fly-through velocity (nose direction at cruise speed): matching to it lets the
+// craft hold speed across its aim rather than braking onto it, so it strafes
+// through the pass instead of parking on the target.
+func (w *World) stepAirHorizontal(u *Unit, target, targetVel fixed.Vec2) {
 	m := u.Meta
 	if m == nil || m.MaxVelocity <= 0 {
 		return
@@ -79,12 +88,13 @@ func (w *World) stepAirHorizontal(u *Unit, target fixed.Vec2) {
 	dz := u.loco.Pos.Z - target.Z
 	dist := fixed.Max(fixed.Vec2{X: dx, Z: dz}.Len(), fixed.FromInt(8))
 	scale := -(m.Accel + m.Accel).Div(dist).Sqrt()
-	// The velocity-match term is (v − targetVel); a fixed-point (move-order) aim
-	// is static, so targetVel is zero. Chasing a moving unit would subtract its
-	// velocity here — a lead term the disassembly leaves unresolved, so it stays
-	// zero until that getter is recovered.
-	ax := dx.Mul(scale) - v.X
-	az := dz.Mul(scale) - v.Z
+	// The velocity-match term is (v − targetVel). A move destination is static,
+	// so targetVel is zero and this is pure damping of the flight velocity onto
+	// the steered heading. When the aim carries its own velocity (an engaging
+	// craft's fly-through), matching to it cancels the damping in the direction
+	// of that velocity, so the craft keeps its speed through the aim.
+	ax := dx.Mul(scale) - (v.X - targetVel.X)
+	az := dz.Mul(scale) - (v.Z - targetVel.Z)
 	if mag := (fixed.Vec2{X: ax, Z: az}).Len(); mag > m.Accel {
 		ax = ax.Mul(m.Accel).Div(mag)
 		az = az.Mul(m.Accel).Div(mag)
@@ -143,6 +153,22 @@ func turnToward(st *locoState, want fixed.Fixed, m *UnitMeta) {
 // ahead along want, so the craft turns onto that heading and cruises up to
 // MaxVelocity. The maneuver planner owns want (the fly-by / egress / drop-line
 // direction); this owns only the motion.
+//
+// This is the engaging-aircraft path, and its motion goal carries a fly-through
+// velocity — nose direction at cruise speed — which the steering law matches to
+// so a closing craft holds its speed across the aim rather than braking onto
+// it. (The engine freezes this velocity from the airframe heading when the
+// engagement begins and dead-reckons it; this per-tick planner re-derives it
+// from the current run direction, which coincides at cruise — the defensible
+// seam for a planner that rebuilds its aim every frame.)
+//
+// The aim sits a fixed distance ahead, far beyond any standoff, so the steering
+// vector always saturates the acceleration clamp and the clamp absorbs the
+// match term: down this path the seeded velocity is faithful but observably
+// inert, and the cruise coincides with the point-order cruise to the raw
+// integer. The term separates the two regimes only when the aim is close (the
+// craft nearly on it), which this far-aim planner never reaches; that near-aim
+// fly-through is what the flight-law unit test exercises directly.
 func (w *World) flyForwardAir(u *Unit, want fixed.Fixed) {
 	sin, cos := headingVec(want)
 	const farAhead = 4000 // wu; well beyond any standoff so the aim stays ahead
@@ -151,7 +177,8 @@ func (w *World) flyForwardAir(u *Unit, want fixed.Fixed) {
 		X: fixed.Wrap32(u.loco.Pos.X + sin.Mul(far)),
 		Z: fixed.Wrap32(u.loco.Pos.Z + cos.Mul(far)),
 	}
-	w.stepAirHorizontal(u, aim)
+	runVel := fixed.Vec2{X: sin.Mul(u.Meta.MaxVelocity), Z: cos.Mul(u.Meta.MaxVelocity)}
+	w.stepAirHorizontal(u, aim, runVel)
 }
 
 // attackManeuver flies an aircraft's attack pattern around the engagement at
