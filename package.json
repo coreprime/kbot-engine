@@ -1,6 +1,6 @@
 {
   "name": "@coreprime/kbot-engine",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Deterministic KBot simulation engine (Go compiled to WebAssembly) with a small ESM loader for browsers and Node.",
   "license": "MIT",
   "type": "module",

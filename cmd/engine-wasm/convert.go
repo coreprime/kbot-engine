@@ -102,6 +102,11 @@ func metaFromJS(o js.Value) *sim.UnitMeta {
 	// A yardmap 'S' cell marks a TA:K sacred-site producer; the studio meta
 	// sets this, and it also derives from the yardmap string as a fallback.
 	m.SacredProducer = getBool(o, "sacredProducer") || strings.ContainsRune(getString(o, "yardMap"), 'S')
+	// A yardmap 'G' cell marks a TA geothermal power plant: it may be founded
+	// only over a geothermal vent, so canBuildAt gates its plot. The studio
+	// passes the FBI yardmap string but not a dedicated flag, so this derives
+	// from that yardmap the same way the native games meta does.
+	m.Geothermal = getBool(o, "geothermal") || strings.ContainsRune(getString(o, "yardMap"), 'G')
 	econFromJS(m, o.Get("econ"))
 	if w := o.Get("weapons"); w.Type() == js.TypeObject && !w.IsNull() {
 		n := w.Length()
