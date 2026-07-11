@@ -324,6 +324,29 @@ func (w *World) stepSpecials(u *Unit) {
 	}
 }
 
+// withinBuildRange drives a builder toward target until it is inside its
+// BuildDistance and reports whether it has arrived. While still out of range it
+// sets a move toward the (live) target and returns false, so the caller's work
+// channel does no work this tick; once inside builddistance it halts the move
+// and returns true. A missing BuildDistance falls back to 50 wu. This is the
+// shared approach gate the repair, reclaim, and capture channels all run so a
+// builder must walk into range before nanolathing, salvaging, or capturing —
+// never acting across the map.
+func (w *World) withinBuildRange(u *Unit, target fixed.Vec2) bool {
+	bd := u.Meta.BuildDistance
+	if bd <= 0 {
+		bd = fixed.FromInt(50)
+	}
+	if u.loco.Pos.DistTo(target) > bd {
+		u.hasMove = true
+		u.moveTarget = target
+		u.clearPath()
+		return false
+	}
+	u.hasMove = false
+	return true
+}
+
 // stepRepair advances an active repair channel one tick: the builder nanolathes
 // its damaged friendly's hit points back up at its workertime pace, draining the
 // prorated buildcost through the pool authority. The channel ends when the hull
@@ -345,17 +368,9 @@ func (w *World) stepRepair(u *Unit) {
 	// the build-resume path walks in before raising a frame. While still out of
 	// range the builder drives toward the (live) target position and heals
 	// nothing this tick; only once inside builddistance does the nanolathe bite.
-	bd := u.Meta.BuildDistance
-	if bd <= 0 {
-		bd = fixed.FromInt(50)
-	}
-	if u.loco.Pos.DistTo(t.loco.Pos) > bd {
-		u.hasMove = true
-		u.moveTarget = t.loco.Pos
-		u.clearPath()
+	if !w.withinBuildRange(u, t.loco.Pos) {
 		return
 	}
-	u.hasMove = false
 	if w.econModel == EconomyTAK {
 		w.takApplyRepair(u, t)
 	} else {
@@ -455,6 +470,13 @@ func (w *World) stepFeatureReclaim(u *Unit) {
 		w.advanceQueue(u)
 		return
 	}
+	// Approach: a reclaimer must be within build range to salvage, exactly as
+	// the repair path walks in before nanolathing. While still out of range it
+	// drives toward the feature and consumes nothing this tick; only once inside
+	// builddistance does the accumulator climb.
+	if !w.withinBuildRange(u, fixed.Vec2{X: f.Pos.X, Z: f.Pos.Z}) {
+		return
+	}
 	u.reclaimAccum++
 	if u.reclaimAccum < u.reclaimFeatureTicks {
 		return
@@ -498,6 +520,12 @@ func (w *World) stepCapture(u *Unit) {
 	t := w.units[u.capTarget]
 	if t == nil || t.Dead {
 		u.capTarget, u.capAccum, u.capTime = 0, 0, 0
+		return
+	}
+	// Approach: close to within build range before the capture channel advances,
+	// exactly as the repair and reclaim channels do — a capturer out of range
+	// makes no progress until it walks in.
+	if !w.withinBuildRange(u, t.loco.Pos) {
 		return
 	}
 	if w.tick%2 != 0 {
@@ -589,6 +617,11 @@ func (w *World) stepReclaim(u *Unit) {
 	if t == nil || t.Dead {
 		u.reclaimTarget, u.reclaimAccum = 0, 0
 		w.advanceQueue(u)
+		return
+	}
+	// Approach: walk into build range before the salvage pulse bites, exactly as
+	// the repair channel does — a reclaimer out of range drains nothing.
+	if !w.withinBuildRange(u, t.loco.Pos) {
 		return
 	}
 	if w.tick%2 != 0 {

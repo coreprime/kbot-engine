@@ -372,6 +372,12 @@ func submitRepair(_ js.Value, args []js.Value) any {
 	if inst == nil {
 		return 0
 	}
+	// Defensive: Repair takes a scalar builderId (unlike Reclaim's id array).
+	// Value.Int on a JS object panics syscall/js and kills the whole program, so
+	// a malformed (non-number) builder arg is a no-op rather than a crash.
+	if len(args) < 3 || args[1].Type() != js.TypeNumber || args[2].Type() != js.TypeNumber {
+		return 0
+	}
 	if len(args) > 3 && args[3].Truthy() {
 		return int(inst.sess.Submit(order.RepairQueued(uint32(args[1].Int()), uint32(args[2].Int()))))
 	}
