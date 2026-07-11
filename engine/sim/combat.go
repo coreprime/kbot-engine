@@ -169,6 +169,11 @@ func (w *World) applyWeaponHit(attackerID uint32, wm *WeaponMeta, victim *Unit, 
 // falloff, bounding-box distance, and the per-game shooter rule (TA excludes
 // the firing unit from its own blast; TA:K does not).
 func (w *World) detonateWeapon(ownerID, directHitID uint32, wm *WeaponMeta, blast fixed.Vec3) {
+	// A firestarter weapon ignites flammable features caught in its blast
+	// (specials.md §7.5) — the primary way a player starts a fire.
+	if wm.Firestarter {
+		w.igniteFeaturesInBlast(blast, wm.AreaOfEffectWU)
+	}
 	aoe := wm.AreaOfEffectWU.Int()
 	if aoe < splashSingleTargetWU {
 		if directHitID == 0 {

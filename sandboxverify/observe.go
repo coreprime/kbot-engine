@@ -75,6 +75,8 @@ func (st *runState) sample(c CheckSpec) (int64, bool, string) {
 		return st.world.WindStrengthMilli(), true, ""
 	case "world.features":
 		return int64(st.world.FeatureCount()), true, ""
+	case "world.burning_features":
+		return int64(st.world.BurningFeatureCount()), true, ""
 	case "world.crt_draws":
 		return int64(st.world.CrtDraws() - st.crtStart), true, ""
 	case "world.meteor_strikes":

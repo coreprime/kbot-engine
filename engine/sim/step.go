@@ -181,6 +181,7 @@ func (w *World) Step(rt Runtime) {
 	// previous tick rolled. The three consume the deterministic RNG streams in
 	// this order, so lockstep draw accounting stays exact.
 	w.stepFeatureReproduction()
+	w.stepFeatureFire()
 	w.stepWind()
 	w.stepMeteors()
 }

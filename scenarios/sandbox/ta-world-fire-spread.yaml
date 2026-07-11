@@ -1,0 +1,70 @@
+# TA feature fire: a lit flammable feature spreads to its flammable neighbours
+# in a 7x7 box, rolling each against its spread chance from the shared MINSTD
+# stream. A 3x3 cluster of trees with the centre ignited fans out to all eight
+# neighbours in one spread event.
+# Ground truth: world.md §1.5 (fire ignite/spread), specials.md §7.5.
+name: ta-world-fire-spread
+game: ta
+system: world
+spec: world.md §1.5, specials.md §7.5
+description: >-
+  A 3x3 cluster of flammable trees (spark_time 2, spread_chance 100) on an 8x8
+  map, centred on cell (4,4). At frame 5 the centre tree is ignited; its
+  one-tick spark countdown expires and it spreads, rolling each of the eight
+  flammable neighbours in its 7x7 box against spread_chance 100 (all pass) and
+  lighting them. The calm wind leaves the downwind probe on the burning centre,
+  so it draws nothing.
+seed: 1
+duration: 15
+terrain:
+  width: 8
+  height: 8
+  cell_wu: 16
+features:
+  - { alias: c,  name: tree, pos: [72, 72], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [56, 56], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [72, 56], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [88, 56], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [56, 72], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [88, 72], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [56, 88], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [72, 88], flammable: true, spark_time: 2, spread_chance: 100 }
+  - { name: tree, pos: [88, 88], flammable: true, spark_time: 2, spread_chance: 100 }
+actions:
+  - at: 5
+    do: ignite
+    unit: c
+checks:
+  - at: 4
+    observable: world.burning_features
+    expect: 0
+    label: nothing burns before ignition
+    derivation: |
+      The trees are inert until lit; no fire starts on its own.
+  - at: 5
+    observable: world.burning_features
+    expect: 9
+    label: fire spreads to all eight neighbours
+    derivation: |
+      The centre is ignited at frame 5 with spark countdown sparktime/2 +
+      rand(1) = 1 + 0 = 1 (rand(1) draws nothing). Its spread rolls each of the
+      eight flammable neighbours in the 7x7 box against spread_chance 100 (all
+      pass) and lights them: 1 centre + 8 = 9 burning.
+    missing_if_zero: true
+  - at: 5
+    observable: world.rng_draws
+    expect: 8
+    label: one spread roll per flammable neighbour
+    derivation: |
+      No units and calm wind, and the trees do not reproduce (reproduce 0), so
+      the only MINSTD draws are the spread's: rand(100) for each of the eight
+      flammable neighbours in the box (empty box cells and the burning centre
+      draw nothing; the countdowns are draw-free at sparktime 2). Total 8.
+    missing_if_zero: true
+  - at: 12
+    observable: world.burning_features
+    expect: 9
+    label: the whole cluster stays alight
+    derivation: |
+      Every tree in the cluster is now burning; later ticks find no flammable
+      non-burning feature in any box, so the count holds at 9.

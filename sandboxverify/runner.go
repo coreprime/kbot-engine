@@ -60,10 +60,11 @@ func skewMs(specTick int, simTick uint64) int64 {
 
 // run state for one scenario.
 type runState struct {
-	world   *sim.World
-	rt      *script.Runtime
-	aliases map[string]uint32 // alias -> unit id
-	metas   map[string]*sim.UnitMeta
+	world          *sim.World
+	rt             *script.Runtime
+	aliases        map[string]uint32 // alias -> unit id
+	featureAliases map[string]uint32 // feature alias -> feature id
+	metas          map[string]*sim.UnitMeta
 	// pendingSpawns maps a buildee type name (lower-cased) to the alias the
 	// next spawned unit of that type binds to.
 	pendingSpawns map[string]string
@@ -232,6 +233,7 @@ func buildWorld(sc *Scenario, root string) (*runState, error) {
 	}
 	// Ambient map features (trees that reproduce, etc.) are placed after the
 	// terrain so their footprint cells anchor on the installed grid.
+	featureAliases := map[string]uint32{}
 	for _, f := range sc.Features {
 		if len(f.Pos) != 2 {
 			continue
@@ -249,21 +251,28 @@ func buildWorld(sc *Scenario, root string) (*runState, error) {
 			FootprintZ:    fz,
 			Reproduce:     f.Reproduce,
 			ReproduceArea: f.ReproduceArea,
+			Flammable:     f.Flammable,
+			SparkTime:     f.SparkTime,
+			SpreadChance:  f.SpreadChance,
 		}
-		w.AddFeature(f.Name, meta, sim.FeatureProp,
+		id := w.AddFeature(f.Name, meta, sim.FeatureProp,
 			fixed.Vec2{X: fixed.FromInt(f.Pos[0]), Z: fixed.FromInt(f.Pos[1])}, 0, -1)
+		if f.Alias != "" {
+			featureAliases[f.Alias] = id
+		}
 	}
 	st := &runState{
-		world:         w,
-		rt:            rt,
-		aliases:       map[string]uint32{},
-		metas:         metas,
-		pendingSpawns: map[string]string{},
-		unsupported:   map[string]string{},
-		fireCounts:    map[uint32]int64{},
-		projSpawns:    map[uint32]int64{},
-		startPos:      map[uint32]fixed.Vec3{},
-		seenUnits:     map[uint32]bool{},
+		world:          w,
+		rt:             rt,
+		aliases:        map[string]uint32{},
+		featureAliases: featureAliases,
+		metas:          metas,
+		pendingSpawns:  map[string]string{},
+		unsupported:    map[string]string{},
+		fireCounts:     map[uint32]int64{},
+		projSpawns:     map[uint32]int64{},
+		startPos:       map[uint32]fixed.Vec3{},
+		seenUnits:      map[uint32]bool{},
 	}
 	// Sample the draw baseline BEFORE the scenario units spawn: unit
 	// initialisation itself consumes sim-stream draws in the engines, and
@@ -341,6 +350,14 @@ func (st *runState) apply(a ActionSpec) {
 		st.world.ApplyOrder(order.Cloak([]uint32{unit}))
 	case "self_destruct":
 		st.world.ApplyOrder(order.SelfDestruct([]uint32{unit}))
+	case "ignite":
+		// Light a flammable map feature (the Unit field names the feature
+		// alias) — the firestarter effect without staging a weapon.
+		if fid, ok := st.featureAliases[a.Unit]; ok {
+			st.world.IgniteFeature(fid)
+		} else {
+			st.markUnsupported(a, fmt.Sprintf("no feature alias %q", a.Unit))
+		}
 	case "share":
 		// Ally resource transfer between two sides (economy.md §2.6). Debits
 		// the donor immediately; the recipient is credited at its next settle.

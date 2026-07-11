@@ -70,8 +70,15 @@ type Scenario struct {
 // featuredef. Features are map objects (trees, rocks), not gamedata-loaded
 // units, so the fields that carry a sim consequence are declared directly here.
 type FeatureSpec struct {
-	Name string `yaml:"name"`
-	Pos  []int  `yaml:"pos"` // [x, z] world units (the footprint centre)
+	Alias string `yaml:"alias"` // handle for the ignite action
+	Name  string `yaml:"name"`
+	Pos   []int  `yaml:"pos"` // [x, z] world units (the footprint centre)
+	// Flammable / SparkTime / SpreadChance drive feature fire (world.md §1.5):
+	// a burnable feature, its ignite→spread countdown, and its per-neighbour
+	// ignition chance.
+	Flammable    bool `yaml:"flammable"`
+	SparkTime    int  `yaml:"spark_time"`
+	SpreadChance int  `yaml:"spread_chance"`
 	// Reproduce / ReproduceArea drive the ambient reproduction scan (world.md
 	// §1.5): reproduce % chance per scan, area the square cell radius offspring
 	// may land within.
@@ -122,7 +129,7 @@ type UnitSpec struct {
 // check that requires them grades missing.
 type ActionSpec struct {
 	At   int    `yaml:"at"` // engine frame
-	Do   string `yaml:"do"` // move|stop|attack|fire_at_point|build|repair|stance|set_kills|set_paralyze|cloak|capture|reclaim|self_destruct|share
+	Do   string `yaml:"do"` // move|stop|attack|fire_at_point|build|repair|stance|set_kills|set_paralyze|cloak|capture|reclaim|self_destruct|share|ignite
 	ID   string `yaml:"id"` // optional handle for requires_action
 	Unit string `yaml:"unit"`
 	// To is the move / fire / build destination in world units.

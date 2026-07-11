@@ -112,6 +112,19 @@ type FeatureMeta struct {
 	// not reproduce, so both stay zero there.
 	Reproduce     int
 	ReproduceArea int
+
+	// Fire (world.md §1.5, specials.md §7.5). Flammable marks a burnable
+	// feature (featuredef seqnameburn present). SparkTime sets the ignite→spread
+	// countdown (sparktime/2 + rand(sparktime/2) ticks). SpreadChance is the
+	// per-neighbour ignition chance (% ) when a burning feature spreads.
+	// FeatureBurnt is the scorched successor a burnt-out feature becomes ("" =
+	// the cell empties). BurnWeapon, when set, is the ownerless splash a burning
+	// feature detonates at spread time (how burning forests damage units).
+	Flammable    bool
+	SparkTime    int
+	SpreadChance int
+	FeatureBurnt string
+	BurnWeapon   *Blast
 }
 
 // Feature is one live placed feature (scenery, metal patch, wreck or sacred
@@ -130,6 +143,13 @@ type Feature struct {
 	HP       int    // current hit points; erodes down the featuredead chain
 	Owner    int    // owning side for a wreck (-1 = neutral map feature)
 	DeadName string // the unit type name a wreck resurrects back into ("" = none)
+
+	// Fire state (fire.go). burning marks a lit feature; sparkTicks counts down
+	// from ignition to its one-shot spread; spread latches once that spread has
+	// fired so a feature spreads exactly once.
+	burning    bool
+	sparkTicks int
+	spread     bool
 }
 
 // footprint returns the feature's occupancy size in cells, flooring a missing

@@ -411,6 +411,10 @@ type WeaponMeta struct {
 	// falloff e + (1−e)(1 − d/r)²; default 0.
 	EdgeEffectiveness float64
 
+	// Firestarter marks a weapon that ignites flammable features in its blast
+	// instead of damaging them (specials.md §7.5): a hit lights forests on fire.
+	Firestarter bool
+
 	// SelfSplash: TA:K applies a shooter's own splash to the shooter; TA
 	// excludes the firing unit from its own blast entirely. Set per weapon by
 	// the asset bridge (TA:K inline weapons true, TA referenced weapons
