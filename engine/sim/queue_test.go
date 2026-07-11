@@ -70,7 +70,11 @@ func TestQueuedReclaimAfterMove(t *testing.T) {
 }
 
 // TestQueuedRepairAfterMove proves a shift-queued repair waits behind the
-// builder's active move leg and heals the damaged friendly once the move lands.
+// builder's active move leg and, once it arms, drives the builder into build
+// range of the damaged friendly before nanolathing — a builder cannot heal a
+// target it has not reached. The target sits at x=200 with BuildDistance 60, so
+// the builder must walk past its x=120 move waypoint to within 60 wu (x>=140)
+// before any hit points come back.
 func TestQueuedRepairAfterMove(t *testing.T) {
 	w := New(Config{Seed: 62, Economy: EconomyTA})
 	bld := w.AddUnit("builder", builderMeta(), nil, fixed.Vec2{}, 0, 0)
@@ -91,11 +95,29 @@ func TestQueuedRepairAfterMove(t *testing.T) {
 	if u.repairTarget != 0 {
 		t.Fatalf("queued repair armed immediately instead of waiting for the move")
 	}
+	// While the builder is still out of build range, the target's hull must not
+	// climb — the repair only bites once the approach lands.
+	bd := u.Meta.BuildDistance
+	healedInRange := false
 	for i := 0; i < 3000 && b.Health < fixed.FromInt(100); i++ {
+		before := b.Health
 		w.Step(nil)
+		if b.Health > before {
+			healedInRange = true
+			if u.loco.Pos.DistTo(b.loco.Pos) > bd {
+				t.Fatalf("repair healed from %v wu, outside BuildDistance %v",
+					u.loco.Pos.DistTo(b.loco.Pos).Float(), bd.Float())
+			}
+		}
 	}
 	if b.Health < fixed.FromInt(100) {
 		t.Fatalf("queued repair never restored full health (at %v%%)", b.Health.Float())
+	}
+	if !healedInRange {
+		t.Fatalf("repair never observed healing in range")
+	}
+	if u.loco.Pos.X < fixed.FromInt(140) {
+		t.Fatalf("builder healed without approaching: stopped at x=%v", u.loco.Pos.X.Float())
 	}
 }
 

@@ -341,6 +341,21 @@ func (w *World) stepRepair(u *Unit) {
 		w.advanceQueue(u)
 		return
 	}
+	// Approach: a builder must be within build range to nanolathe, exactly as
+	// the build-resume path walks in before raising a frame. While still out of
+	// range the builder drives toward the (live) target position and heals
+	// nothing this tick; only once inside builddistance does the nanolathe bite.
+	bd := u.Meta.BuildDistance
+	if bd <= 0 {
+		bd = fixed.FromInt(50)
+	}
+	if u.loco.Pos.DistTo(t.loco.Pos) > bd {
+		u.hasMove = true
+		u.moveTarget = t.loco.Pos
+		u.clearPath()
+		return
+	}
+	u.hasMove = false
 	if w.econModel == EconomyTAK {
 		w.takApplyRepair(u, t)
 	} else {
