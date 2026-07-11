@@ -143,6 +143,8 @@ func (w *World) Step(rt Runtime) {
 		w.stepMovement(u)
 	}
 	w.drainTransfers()
+	// Reap the corpse bodies any reclaimed wreck queued this tick.
+	w.drainWreckReaps()
 	// A monarch death queued a side defeat this tick: kill the fallen side's
 	// remaining units (specials.md §7.3).
 	w.drainDefeats()

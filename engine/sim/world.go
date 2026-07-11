@@ -528,6 +528,11 @@ type World struct {
 	// mutation never disturbs the per-unit tick walk (specials.go).
 	pendingTransfers []pendingTransfer
 
+	// pendingWreckReaps queues the corpse bodies a reclaimed wreck leaves behind
+	// (the dead-unit entity that spawned the wreck feature): removing it must
+	// wait for the same post-loop drain, since a wreck is reclaimed mid-walk.
+	pendingWreckReaps []uint32
+
 	// monarchDeath is the MonarchDeath lobby option (TA:K): with it on, a
 	// side whose monarch (commander-flagged unit) dies is defeated — every unit
 	// it owns dies (specials.md §7.3). pendingDefeats queues those side defeats
@@ -775,11 +780,16 @@ func (w *World) spawnWreck(u *Unit, corpsetype int32) {
 	}
 	at := fixed.Vec2{X: u.loco.Pos.X, Z: u.loco.Pos.Z}
 	id := w.AddFeature(meta.Name, meta, FeatureWreck, at, u.Heading(), u.Side)
-	// A resurrector raises the wreck back into the unit type that died, so the
-	// wreck records the dead unit's name (only the intact corpse resurrects;
-	// the damaged heap loses that lineage).
-	if f := w.features[id]; f != nil && corpsetype == 1 {
-		f.DeadName = u.Name
+	if f := w.features[id]; f != nil {
+		// The client renders the wreck as this unit's swapped corpse model, so
+		// reclaiming the wreck reaps the body through SourceUnit.
+		f.SourceUnit = u.ID
+		// A resurrector raises the wreck back into the unit type that died, so
+		// the wreck records the dead unit's name (only the intact corpse
+		// resurrects; the damaged heap loses that lineage).
+		if corpsetype == 1 {
+			f.DeadName = u.Name
+		}
 	}
 }
 

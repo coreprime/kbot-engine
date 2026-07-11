@@ -149,6 +149,11 @@ func TestWreckLeftOnDeathReclaimable(t *testing.T) {
 	if !wreck.Meta.Reclaimable {
 		t.Fatalf("wreck not reclaimable")
 	}
+	// The wreck records the dead body it was spawned from so the reclaim path
+	// can reap it (the client renders the wreck as that body's corpse model).
+	if wreck.SourceUnit != vid {
+		t.Fatalf("wreck sourceUnit=%d, want the dead unit %d", wreck.SourceUnit, vid)
+	}
 
 	// A reclaimer salvages it for metal.
 	m := featureReclaimerMeta("con")
@@ -163,6 +168,10 @@ func TestWreckLeftOnDeathReclaimable(t *testing.T) {
 	}
 	if got := w.econView(0).stock.Metal - before; got < fixed.FromInt(59) {
 		t.Fatalf("wreck reclaim metal=%v, want ~60", got.Float())
+	}
+	// Reclaiming the wreck reaps the corpse body it was drawn from.
+	if w.UnitByID(vid) != nil {
+		t.Fatalf("reclaimed wreck left its corpse body (unit %d) behind", vid)
 	}
 }
 

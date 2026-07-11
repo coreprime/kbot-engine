@@ -434,9 +434,32 @@ func (w *World) stepFeatureReclaim(u *Unit) {
 	}
 	w.creditFeatureReclaim(u.Side, f.Meta)
 	w.emit(frame.Event{Kind: frame.EvDespawn, UnitID: f.ID, Anchor: f.Pos})
+	// A wreck the client draws as its dead unit's corpse model: dismiss that
+	// body too (a wreck-suppressing reason-5 death so no blast, no new wreck),
+	// then reap the entity after the tick walk finishes.
+	if f.Kind == FeatureWreck && f.SourceUnit != 0 {
+		if body := w.units[f.SourceUnit]; body != nil {
+			w.emit(frame.Event{Kind: frame.EvDeath, UnitID: f.SourceUnit, Anchor: f.Pos, SfxType: deathReasonReclaimed})
+			w.pendingWreckReaps = append(w.pendingWreckReaps, f.SourceUnit)
+		}
+	}
 	w.removeFeature(f.ID)
 	u.reclaimFeature, u.reclaimAccum, u.reclaimFeatureTicks = 0, 0, 0
 	w.advanceQueue(u)
+}
+
+// drainWreckReaps removes the corpse bodies queued by reclaimed wrecks. Called
+// once per tick after the per-unit phase, where RemoveUnit's order-slice
+// mutation is safe (mirrors drainTransfers / drainDefeats).
+func (w *World) drainWreckReaps() {
+	if len(w.pendingWreckReaps) == 0 {
+		return
+	}
+	pending := w.pendingWreckReaps
+	w.pendingWreckReaps = w.pendingWreckReaps[:0]
+	for _, id := range pending {
+		w.RemoveUnit(id)
+	}
 }
 
 // stepCapture advances the capture channel by two accumulator counts per

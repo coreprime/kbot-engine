@@ -143,6 +143,11 @@ type Feature struct {
 	HP       int    // current hit points; erodes down the featuredead chain
 	Owner    int    // owning side for a wreck (-1 = neutral map feature)
 	DeadName string // the unit type name a wreck resurrects back into ("" = none)
+	// SourceUnit is the dead-unit entity a wreck was spawned from (0 for a map
+	// feature). The client renders a wreck as that unit's swapped corpse model,
+	// so reclaiming the wreck must reap the body too — the reclaim path uses this
+	// to clear it (world.go spawnWreck / specials.go stepFeatureReclaim).
+	SourceUnit uint32
 
 	// Fire state (fire.go). burning marks a lit feature; sparkTicks counts down
 	// from ignition to its one-shot spread; spread latches once that spread has
