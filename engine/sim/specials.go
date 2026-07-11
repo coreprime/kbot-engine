@@ -241,6 +241,8 @@ func reclaimChunk(builder, target *Unit) int {
 // decay. Called from the per-unit phase in Step.
 func (w *World) stepSpecials(u *Unit) {
 	w.stepPrivateMana(u)
+	w.stepStockpile(u)
+	w.stepCloakProximity(u)
 	if u.capTarget != 0 {
 		w.stepCapture(u)
 	}
@@ -322,6 +324,50 @@ func (w *World) drainTransfers() {
 	}
 }
 
+// drainDefeats applies every queued side defeat (monarch death, specials.md
+// §7.3): each newly-defeated side is recorded, a defeat event emitted, and
+// every remaining unit that side owns is killed. Called once per tick after the
+// per-unit phase so the mass kill never disturbs the tick walk.
+func (w *World) drainDefeats() {
+	if len(w.pendingDefeats) == 0 {
+		return
+	}
+	pending := w.pendingDefeats
+	w.pendingDefeats = w.pendingDefeats[:0]
+	for _, side := range pending {
+		if side < 0 || side >= maxSides || w.defeatedSides[side] {
+			continue
+		}
+		w.defeatedSides[side] = true
+		w.emit(frame.Event{Kind: frame.EvDefeat, Slot: side})
+		w.killPlayerUnits(side)
+	}
+}
+
+// killPlayerUnits kills every living unit a side owns — the game_kill_player_
+// units effect a monarch death triggers (specials.md §7.3). The dying units get
+// a plain death (no secondary blast) so a defeat does not chain explosions
+// across the whole army; iteration is over a snapshot of the insertion order.
+func (w *World) killPlayerUnits(side int) {
+	ids := append([]uint32(nil), w.order...)
+	for _, id := range ids {
+		u := w.units[id]
+		if u == nil || u.Dead || u.Side != side {
+			continue
+		}
+		w.killUnit(u, 100, Blast{})
+	}
+}
+
+// SideDefeated reports whether a side has been defeated (its monarch died with
+// the MonarchDeath option on) — a harness/UI accessor.
+func (w *World) SideDefeated(side int) bool {
+	if side < 0 || side >= maxSides {
+		return false
+	}
+	return w.defeatedSides[side]
+}
+
 // stepReclaim advances the reclaim pulse: the accumulator climbs 2 per 2-tick
 // visit and, when it exceeds 14 — every 16 ticks, the sized-for-15 off-by-one
 // — applies one chunk of reason-5 damage. At the target's death the metal
@@ -394,6 +440,69 @@ func (w *World) transferOwnership(t *Unit, newSide int, reason int) {
 		nu.buildHP = maxDamage(meta)
 		w.emit(frame.Event{Kind: frame.EvSpawn, UnitID: id, Anchor: nu.Pos()})
 	}
+}
+
+// kamikazeMinDistance is the floor on a kamikaze run's approach radius
+// (specials.md §6.1.3: goalRadius = max(kamikazedistance, 16) wu).
+const kamikazeMinDistance = 16
+
+// applyKamikaze arms a kamikaze run: a kamikaze-flagged unit closes on the
+// target and detonates. Only a unit whose FBI declares the kamikaze flag takes
+// the order (specials.md §6.1.3).
+func (w *World) applyKamikaze(u *Unit, targetID uint32) {
+	if u == nil || u.Dead || u.underConstruction() || u.Meta == nil || !u.Meta.Kamikaze {
+		return
+	}
+	t := w.units[targetID]
+	if t == nil || t.Dead || t == u {
+		return
+	}
+	u.kamiTarget = targetID
+	u.hasAttack = false
+	u.queue = nil
+}
+
+// kamikazeGoalRadius is a kamikaze unit's approach radius: max(kamikazedistance,
+// 16) wu (specials.md §6.1.3, the asm `cmp ax,0x10; jae` clamp).
+func kamikazeGoalRadius(m *UnitMeta) int {
+	r := m.KamikazeDistance
+	if r < kamikazeMinDistance {
+		r = kamikazeMinDistance
+	}
+	return r
+}
+
+// stepKamikaze advances a kamikaze run (specials.md §6.1.3): the unit chases
+// the live target position until it is within max(kamikazedistance, 16) wu,
+// then self-destructs on top of it (its selfdestructas blast, the reason-3
+// death path). A dead or vanished target ends the run.
+func (w *World) stepKamikaze(u *Unit) {
+	if u.kamiTarget == 0 {
+		return
+	}
+	t := w.units[u.kamiTarget]
+	if t == nil || t.Dead {
+		u.kamiTarget = 0
+		u.hasMove = false
+		return
+	}
+	goal := fixed.FromInt(kamikazeGoalRadius(u.Meta))
+	if u.loco.Pos.DistTo(t.loco.Pos) > goal {
+		u.hasMove = true
+		u.moveTarget = t.loco.Pos
+		return
+	}
+	// Arrived: detonate. The self-destruct blast (selfdestructas) goes off on
+	// top of the target; the run ends with the unit's death.
+	u.kamiTarget = 0
+	u.hasMove = false
+	w.killUnit(u, 100, u.Meta.SelfD)
+}
+
+// ApplyKamikaze is the bridge/harness entry point that sends a kamikaze unit to
+// close on a target and detonate.
+func (w *World) ApplyKamikaze(unitID, targetID uint32) {
+	w.applyKamikaze(w.units[unitID], targetID)
 }
 
 // paralyzeMaxTicks is the 60-second (1800-tick) cap on a Paralyze order's
@@ -514,6 +623,27 @@ func (w *World) MindControlThreshold(id uint32) int {
 	return 0
 }
 
+// spellManaCost is the private mana a TA:K spell weapon debits per shot: the
+// weapon's ManaPerShot divided by the caster's veteran multiplier (1 + 0.1·L),
+// so a levelled caster casts cheaper (specials.md §7.1 / §4.2 consumer 1). Zero
+// for a non-spell weapon.
+func spellManaCost(u *Unit, wm *WeaponMeta) float64 {
+	if wm == nil || wm.ManaPerShot <= 0 {
+		return 0
+	}
+	return wm.ManaPerShot / takVetMul(u)
+}
+
+// SpellManaCost exposes the veteran-discounted per-shot mana price of a unit's
+// weapon slot — the harness grades the discount ladder exactly.
+func (w *World) SpellManaCost(id uint32, slot int) float64 {
+	u := w.units[id]
+	if u == nil || u.Meta == nil || slot < 0 || slot >= len(u.Meta.Weapons) {
+		return 0
+	}
+	return spellManaCost(u, &u.Meta.Weapons[slot])
+}
+
 // stepPrivateMana recharges a TA:K unit's private mana pool (§7.1): free,
 // per-tick, clamped to MaxMana, only while active and fully built. TA units
 // (MaxMana == 0) never accumulate.
@@ -530,12 +660,65 @@ func (w *World) stepPrivateMana(u *Unit) {
 	}
 }
 
+// Decloak-hold windows (specials.md §5.1): firing forces a unit visible for
+// 600 ticks, an enemy within mincloakdistance for 90 ticks. Applied to both
+// engines (TA's figures reused as the TA:K equivalent — TA:K pins only the
+// per-tick drain and its 90-tick mana-shortfall relock).
+const (
+	cloakFireHoldTicks      = 600
+	cloakProximityHoldTicks = 90
+)
+
+// breakCloakOnFire forces a cloak-capable unit visible for the fire hold when
+// it fires a weapon (specials.md §5.1: firing breaks cloak). A no-op for a unit
+// that neither cloaks nor holds a stance.
+func (w *World) breakCloakOnFire(u *Unit) {
+	if u.Meta == nil || (!u.Meta.CanCloak && !u.cloakStance) {
+		return
+	}
+	if hold := w.tick + cloakFireHoldTicks; hold > u.decloakHold {
+		u.decloakHold = hold
+	}
+	u.cloaked = false
+}
+
+// stepCloakProximity forces a cloaked/stanced unit visible when an enemy is
+// within its mincloakdistance (specials.md §5.1: enemy proximity +90). Runs
+// each tick before the drain evaluation; the enemy scan follows insertion
+// order, so it is deterministic.
+func (w *World) stepCloakProximity(u *Unit) {
+	if u.Meta == nil || !u.cloakStance || u.Meta.MinCloakDistance <= 0 {
+		return
+	}
+	rng := fixed.FromInt(u.Meta.MinCloakDistance)
+	for _, id := range w.order {
+		e := w.units[id]
+		if e == nil || e.Dead || e.Side == u.Side || e.carriedBy != 0 {
+			continue
+		}
+		if u.loco.Pos.DistTo(e.loco.Pos) > rng {
+			continue
+		}
+		if hold := w.tick + cloakProximityHoldTicks; hold > u.decloakHold {
+			u.decloakHold = hold
+		}
+		u.cloaked = false
+		return
+	}
+}
+
 // stepCloakSettle runs a TA unit's per-settle cloak drain (specials.md §5.1):
-// while cloaked, an all-or-nothing energy drain of ftol(cloakcost) stationary
-// or ftol(cloakcostmoving) moving. On shortfall the unit decloaks. Called from
-// the TA settle (once per second).
+// while its stance is set and no decloak hold is live, an all-or-nothing energy
+// drain of ftol(cloakcost) stationary or ftol(cloakcostmoving) moving pays for
+// cloak; a paid settle (re)cloaks the unit, a shortfall or an active hold
+// leaves it visible. Called from the TA settle (once per second).
 func (w *World) stepCloakSettle(u *Unit) {
-	if u.Meta == nil || !u.cloaked || u.underConstruction() {
+	if u.Meta == nil || !u.cloakStance || u.underConstruction() {
+		u.cloaked = false
+		return
+	}
+	if w.tick < u.decloakHold {
+		u.cloaked = false // forced visible: no drain while held
 		return
 	}
 	cost := u.Meta.CloakCost
@@ -544,22 +727,23 @@ func (w *World) stepCloakSettle(u *Unit) {
 	}
 	drain := float32(ftol(float64(cost)))
 	if drain <= 0 {
+		u.cloaked = true
 		return
 	}
-	if !w.taConsumeShot(u.Side, drain, 0) {
-		u.cloaked = false // shortfall: decloak
-	}
+	u.cloaked = w.taConsumeShot(u.Side, drain, 0) // shortfall: stays visible
 }
 
 // stepCloakTAK runs a TA:K unit's per-tick cloak drain off the private mana
 // pool (specials.md §5.2): cost is cloakcost/cloakcostmoving already stored
-// ÷30 at parse. On a private-pool shortfall the unit decloaks and takes a
+// ÷30 at parse. A live decloak hold or the shortfall lockout keeps the unit
+// visible; a paid tick cloaks it. On a private-pool shortfall the unit takes a
 // 90-tick re-cloak lockout.
 func (w *World) stepCloakTAK(u *Unit) {
-	if u.Meta == nil || !u.cloaked || u.underConstruction() {
+	if u.Meta == nil || !u.cloakStance || u.underConstruction() {
+		u.cloaked = false
 		return
 	}
-	if w.tick < u.cloakLock {
+	if w.tick < u.decloakHold || w.tick < u.cloakLock {
 		u.cloaked = false
 		return
 	}
@@ -569,10 +753,11 @@ func (w *World) stepCloakTAK(u *Unit) {
 	}
 	if u.privMana < cost {
 		u.cloaked = false
-		u.cloakLock = w.tick + 90
+		u.cloakLock = w.tick + cloakProximityHoldTicks
 		return
 	}
 	u.privMana -= cost
+	u.cloaked = true
 }
 
 // PrivateMana reports a TA:K unit's private mana pool (0 for TA / an absent
@@ -582,6 +767,23 @@ func (w *World) PrivateMana(id uint32) float32 {
 		return u.privMana
 	}
 	return 0
+}
+
+// SetPrivateMana pins a TA:K unit's private mana pool directly — a measurement
+// hook so a scenario can seat a caster's pool before observing a spell drain
+// without stepping out the free recharge. Clamped to [0, MaxMana].
+func (w *World) SetPrivateMana(id uint32, mana float32) {
+	u := w.units[id]
+	if u == nil {
+		return
+	}
+	if mana < 0 {
+		mana = 0
+	}
+	if u.Meta != nil && u.Meta.MaxMana > 0 && mana > u.Meta.MaxMana {
+		mana = u.Meta.MaxMana
+	}
+	u.privMana = mana
 }
 
 // Cloaked reports whether a unit is currently cloaked.
@@ -712,10 +914,145 @@ func (w *World) ResurrectTicks(builderID uint32, targetBuildTime float64) int {
 }
 
 // StockpileCap is the per-slot stockpile ceiling (specials.md §6.1.1): the
-// stock byte a stockpile weapon builds toward saturates at 200. The full
-// stockpile firing pipeline is a later block (DELTA §7); this pins the cap the
-// spec fixes, exposed for the harness to grade as the invariant.
+// stock byte a stockpile weapon builds toward saturates at 200.
 func (w *World) StockpileCap() int { return 200 }
+
+// stepStockpile advances every stockpile weapon slot's build: the per-tick
+// accumulator climbs to the weapon's reload interval and, each time it reaches
+// it, rolls one round into the slot's stock, capped at 200 (specials.md
+// §6.1.1). The build runs while the unit is active and fully built — the
+// launcher tops itself up whether or not it currently holds a fire target.
+func (w *World) stepStockpile(u *Unit) {
+	if u.Meta == nil || u.underConstruction() {
+		return
+	}
+	for slot := range u.Meta.Weapons {
+		wm := &u.Meta.Weapons[slot]
+		if !wm.Stockpile {
+			continue
+		}
+		s := &u.weapons[slot]
+		if s.stock >= stockpileCap {
+			s.stockBuild = 0
+			continue
+		}
+		interval := wm.ReloadTicks
+		if interval < 1 {
+			interval = 1
+		}
+		s.stockBuild++
+		if s.stockBuild >= interval {
+			s.stockBuild = 0
+			s.stock++
+		}
+	}
+}
+
+// stockpileCap is the 200-round ceiling a stockpile weapon builds toward.
+const stockpileCap = 200
+
+// WeaponStock reports a unit's built stockpile round count for a weapon slot —
+// a harness/inspection accessor (0 for a non-stockpile slot).
+func (w *World) WeaponStock(id uint32, slot int) int {
+	u := w.units[id]
+	if u == nil || slot < 0 || slot >= len(u.weapons) {
+		return 0
+	}
+	return u.weapons[slot].stock
+}
+
+// SetWeaponStock pins a unit's stockpile round count directly — a measurement
+// hook so a scenario can seat a loaded launcher before observing a launch or an
+// interception without stepping out the whole build. Clamped to [0, 200].
+func (w *World) SetWeaponStock(id uint32, slot, stock int) {
+	u := w.units[id]
+	if u == nil || slot < 0 || slot >= len(u.weapons) {
+		return
+	}
+	if stock < 0 {
+		stock = 0
+	}
+	if stock > stockpileCap {
+		stock = stockpileCap
+	}
+	u.weapons[slot].stock = stock
+}
+
+// stepInterceptors runs the anti-nuke firing pipeline (specials.md §6.1.2):
+// each interceptor weapon slot holding stock scans the live projectiles for an
+// enemy shot whose weapon is targetable and which sits inside the interceptor's
+// 2D square coverage box; on a match it spends one interceptor round and
+// detonates the incoming shot in place (the nuke goes off with its own full
+// AoE at the interception point). No projectile is double-targeted — two
+// interceptors never intercept the same missile in one tick. Runs after the
+// projectile flight step so coverage is tested against this tick's positions.
+func (w *World) stepInterceptors() {
+	if len(w.projectiles) == 0 {
+		return
+	}
+	claimed := map[uint32]bool{}
+	for _, id := range w.order {
+		u := w.units[id]
+		if u == nil || u.Dead || u.Meta == nil || u.underConstruction() {
+			continue
+		}
+		for slot := range u.Meta.Weapons {
+			wm := &u.Meta.Weapons[slot]
+			if !wm.Interceptor || wm.CoverageWU <= 0 {
+				continue
+			}
+			s := &u.weapons[slot]
+			if s.stock <= 0 {
+				continue
+			}
+			p := w.acquireInterceptTarget(u, wm, claimed)
+			if p == nil {
+				continue
+			}
+			claimed[p.id] = true
+			s.stock--
+			w.emit(frame.Event{Kind: frame.EvFire, UnitID: u.ID, Slot: slot, Anchor: u.Pos(), Target: p.pos, Weapon: wm.Name})
+			p.dead = true
+			p.hit = true
+			w.detonate(p)
+		}
+	}
+	// Reap the intercepted shots so they do not also fly on this tick.
+	if len(claimed) > 0 {
+		alive := w.projectiles[:0]
+		for _, p := range w.projectiles {
+			if p.dead && claimed[p.id] {
+				continue
+			}
+			alive = append(alive, p)
+		}
+		w.projectiles = alive
+	}
+}
+
+// acquireInterceptTarget finds the first live enemy targetable projectile
+// inside an interceptor's square coverage box that no other interceptor has
+// claimed this tick (specials.md §6.1.2 acquisition). Insertion order is
+// stable, so the choice is deterministic.
+func (w *World) acquireInterceptTarget(u *Unit, wm *WeaponMeta, claimed map[uint32]bool) *projectile {
+	origin := u.Pos()
+	for _, p := range w.projectiles {
+		if p == nil || p.dead || claimed[p.id] {
+			continue
+		}
+		if !p.wm.Targetable {
+			continue
+		}
+		if w.ownerSide(p.ownerID) == u.Side {
+			continue // only enemy shots
+		}
+		if !coverageCovers(wm.CoverageWU, (p.pos.X - origin.X).Int(), (p.pos.Z - origin.Z).Int()) {
+			continue
+		}
+		return p
+	}
+	return nil
+}
 
 // coverageCovers is the anti-nuke 2D SQUARE box coverage test (specials.md
 // §6.1.2): a target at world offset (dx, dz) from the interceptor is covered

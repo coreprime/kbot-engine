@@ -100,6 +100,13 @@ type weaponSlot struct {
 	// eventually returns the turret to its home pose while a target is still
 	// being tracked.
 	aimLastIssueMs int64
+
+	// stock / stockBuild drive a stockpile weapon (nuke launcher): stock is the
+	// built-up round count (cap 200), decremented one per launch; stockBuild is
+	// the per-tick build accumulator that rolls a new round into stock every
+	// reload interval (specials.md §6.1.1). Both stay zero on ordinary weapons.
+	stock      int
+	stockBuild int
 }
 
 // Unit is one live simulated unit.
@@ -261,13 +268,23 @@ type Unit struct {
 	resurrectFeature   uint32
 	resurrectAccum     int
 	resurrectChanTicks int
-	// cloaked marks the unit's cloak stance (a cloak order set it). cloakLock
-	// is a TA:K re-cloak lockout tick (shortfall relock); relit each shortfall.
-	cloaked   bool
-	cloakLock uint64
+	// cloakStance is the unit's cloak INTENT (a Cloak order toggles it);
+	// cloaked is the derived ACTUAL state read by LOS/targeting. A stance unit
+	// is cloaked only while it can pay the drain and no decloak hold is live.
+	// cloakLock is a TA:K re-cloak lockout tick (mana shortfall relock);
+	// decloakHold forces the unit visible until its tick (firing / an enemy
+	// inside mincloakdistance sets it), specials.md §5.
+	cloakStance bool
+	cloaked     bool
+	cloakLock   uint64
+	decloakHold uint64
 	// paralyzeAccum is the decaying paralyze tick count (§7.2), capped at
 	// 1800; while >0 the unit is stunned (steps no movement/weapons).
 	paralyzeAccum int
+	// kamiTarget is the unit this kamikaze is closing on to detonate (0 = no
+	// kamikaze run); it moves to within max(kamikazedistance,16) wu then
+	// self-destructs (specials.md §6.1.3).
+	kamiTarget uint32
 	// privMana is the TA:K unit-private mana pool (+0xd8): spawns empty,
 	// recharges free per tick to Meta.MaxMana, drained by spells and cloak.
 	privMana float32
@@ -478,6 +495,14 @@ type World struct {
 	// mutation never disturbs the per-unit tick walk (specials.go).
 	pendingTransfers []pendingTransfer
 
+	// monarchDeath is the MonarchDeath lobby option (TA:K): with it on, a
+	// side whose monarch (commander-flagged unit) dies is defeated — every unit
+	// it owns dies (specials.md §7.3). pendingDefeats queues those side defeats
+	// for a post-loop drain; defeatedSides records which sides have fallen.
+	monarchDeath   bool
+	pendingDefeats []int
+	defeatedSides  [maxSides]bool
+
 	// Vision layer (sight.go), rebuilt every tick from unit positions. All of
 	// it is derived state — a pure function of the hashed unit set — so none
 	// of it is hashed or serialised. sightSrc/radarSrc are the per-side source
@@ -529,6 +554,9 @@ type Config struct {
 	// The storage-cap bonus derives as max(start, 200).
 	StartMetal  int
 	StartEnergy int
+	// MonarchDeath is the TA:K MonarchDeath lobby option: with it on, a side
+	// whose monarch dies loses every remaining unit (specials.md §7.3).
+	MonarchDeath bool
 }
 
 // defaultGravity is the engine default projectile gravity on the sandbox's
@@ -575,6 +603,7 @@ func New(cfg Config) *World {
 		econModel:     cfg.Economy,
 		startMetal:    sm,
 		startEnergy:   se,
+		monarchDeath:  cfg.MonarchDeath,
 	}
 }
 
@@ -1930,8 +1959,15 @@ func (w *World) ApplyOrder(o order.Order) {
 	case order.KindCloak:
 		for _, id := range o.UnitIDs {
 			if u := w.units[id]; u != nil && !u.Dead && !u.underConstruction() && u.Meta != nil && u.Meta.CanCloak {
-				u.cloaked = !u.cloaked
+				u.cloakStance = !u.cloakStance
+				// Turning the stance on cloaks optimistically (the drain
+				// maintains or drops it); turning it off decloaks at once.
+				u.cloaked = u.cloakStance
 			}
+		}
+	case order.KindKamikaze:
+		for _, id := range o.UnitIDs {
+			w.applyKamikaze(w.units[id], o.TargetUnit)
 		}
 	case order.KindBuild:
 		// Resume gesture: a Build naming an existing under-construction

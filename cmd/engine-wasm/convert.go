@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"math"
 	"strconv"
+	"strings"
 	"syscall/js"
 
 	"github.com/coreprime/kbot-engine/engine/fixed"
@@ -33,6 +34,7 @@ func metaFromJS(o js.Value) *sim.UnitMeta {
 		IsHovercraft:      getBool(o, "isHovercraft"),
 		IsBuilder:         getBool(o, "isBuilder"),
 		OnOffable:         getBool(o, "onoffable"),
+		IsAirBase:         getBool(o, "isAirBase"),
 		ActivateWhenBuilt: getBool(o, "activateWhenBuilt"),
 	}
 	m.BuildTime = fixed.FromFloat(getFloat(o, "buildTime"))
@@ -45,6 +47,15 @@ func metaFromJS(o js.Value) *sim.UnitMeta {
 	m.MaxSlope = getInt(o, "maxSlope")
 	m.MaxWaterDepth = getInt(o, "maxWaterDepth")
 	m.MinWaterDepth = getInt(o, "minWaterDepth")
+	// Vision figures (world units): the sight radius each unit reveals to its
+	// side and the radar/sonar/jam radii it contributes, gating autonomous
+	// acquisition (engine/sim/sight.go). Absent keys read as 0 — a unit with
+	// no sight data leaves its side omniscient, so a meta that predates the
+	// vision plumbing behaves exactly as before.
+	m.SightDistance = getInt(o, "sightDistance")
+	m.RadarDistance = getInt(o, "radarDistance")
+	m.SonarDistance = getInt(o, "sonarDistance")
+	m.RadarDistanceJam = getInt(o, "radarDistanceJam")
 	m.CostMetal = fixed.FromFloat(getFloat(o, "costMetal"))
 	m.CostEnergy = fixed.FromFloat(getFloat(o, "costEnergy"))
 	m.CostMana = fixed.FromFloat(getFloat(o, "costMana"))
@@ -62,13 +73,130 @@ func metaFromJS(o js.Value) *sim.UnitMeta {
 	m.StoreMana = fixed.FromFloat(getFloat(o, "storesMana"))
 	m.CruiseAltitude = fixed.FromFloat(getFloat(o, "cruiseAltitude"))
 	m.MaxHealth = fixed.FromFloat(getFloat(o, "maxDamage"))
+	// Authoritative combat identity + special-mechanic block, filled by the
+	// studio's shared games meta builder (see internal/studio/unit.go
+	// enrichMetaJSON). Absent keys read as their zero value, so a meta that
+	// predates the enrichment (a bare { name } fallback) degrades cleanly.
+	m.ObjectName = getString(o, "objectName")
+	m.DamageCategory = getString(o, "damageCategory")
+	m.ExperiencePoints = getInt(o, "experiencePoints")
+	// A footprint-derived splash box, matching enrichTA's CombatBoxSet path so
+	// browser splash falloff measures the same body extent the host does.
+	m.CombatBoxSet = true
+	m.CombatBoxHalfX = fixed.FromInt(m.FootprintX * 4)
+	m.CombatBoxHalfZ = fixed.FromInt(m.FootprintZ * 4)
+	m.CanCapture = getBool(o, "canCapture")
+	m.CanReclaim = getBool(o, "canReclaim")
+	m.CanResurrect = getBool(o, "canResurrect")
+	m.Commander = getBool(o, "commander")
+	m.CantBeCaptured = getBool(o, "cantBeCaptured")
+	m.CanCloak = getBool(o, "canCloak")
+	m.CloakCost = float32(getFloat(o, "cloakCost"))
+	m.CloakCostMoving = float32(getFloat(o, "cloakCostMoving"))
+	m.MinCloakDistance = getInt(o, "minCloakDistance")
+	m.MaxMana = float32(getFloat(o, "maxMana"))
+	m.ManaRechargeTick = float32(getFloat(o, "manaRechargeTick"))
+	m.SelfDestructCountdown = getInt(o, "selfDestructCountdown")
+	m.Kamikaze = getBool(o, "kamikaze")
+	m.KamikazeDistance = getInt(o, "kamikazeDistance")
+	// A yardmap 'S' cell marks a TA:K sacred-site producer; the studio meta
+	// sets this, and it also derives from the yardmap string as a fallback.
+	m.SacredProducer = getBool(o, "sacredProducer") || strings.ContainsRune(getString(o, "yardMap"), 'S')
+	econFromJS(m, o.Get("econ"))
 	if w := o.Get("weapons"); w.Type() == js.TypeObject && !w.IsNull() {
 		n := w.Length()
 		for i := 0; i < n && i < 3; i++ {
 			m.Weapons[i] = weaponFromJS(w.Index(i))
 		}
 	}
+	m.Wreck = wreckFromJS(m, o.Get("wreck"))
 	return m
+}
+
+// wreckFromJS resolves the unit's corpse featuredef the death path spawns as a
+// reclaimable wreck. When the meta carries an explicit "wreck" object (the
+// studio resolving the FBI corpse= through its feature registry), those fields
+// win; otherwise a build-cost-derived default stands in (metal ≈ the unit's
+// build metal, HP = maxdamage, footprint = the unit's), mirroring the games
+// asset bridge. Aircraft leave no wreck. A returned nil means "blow apart
+// cleanly".
+func wreckFromJS(m *sim.UnitMeta, o js.Value) *sim.FeatureMeta {
+	if m.IsAircraft {
+		return nil
+	}
+	if o.Type() == js.TypeObject && !o.IsNull() {
+		name := getString(o, "name")
+		if name == "" {
+			name = m.Name + "_dead"
+		}
+		fx, fz := getInt(o, "footprintX"), getInt(o, "footprintZ")
+		if fx <= 0 {
+			fx = m.FootprintX
+		}
+		if fz <= 0 {
+			fz = m.FootprintZ
+		}
+		return &sim.FeatureMeta{
+			Name:        name,
+			FootprintX:  fx,
+			FootprintZ:  fz,
+			Metal:       getInt(o, "metal"),
+			Energy:      getInt(o, "energy"),
+			MaxHP:       getInt(o, "maxHP"),
+			Reclaimable: true,
+			FeatureDead: getString(o, "featureDead"),
+		}
+	}
+	metal := int(m.Econ.BuildCostMetal)
+	if metal < 1 {
+		metal = 1
+	}
+	hp := m.MaxHealth.Int()
+	if hp < 1 {
+		hp = 1
+	}
+	return &sim.FeatureMeta{
+		Name:        m.Name + "_dead",
+		FootprintX:  m.FootprintX,
+		FootprintZ:  m.FootprintZ,
+		Metal:       metal,
+		MaxHP:       hp,
+		Reclaimable: true,
+	}
+}
+
+// econFromJS fills the exact float32 economy stat block from the meta's nested
+// "econ" object. A missing / null block leaves the zero EconMeta (the world's
+// economy then reads whatever the fixed-point HUD prices imply). float32 is the
+// width both engines compute their economies in, so the JSON numbers narrow
+// back to float32 here at the boundary.
+func econFromJS(m *sim.UnitMeta, o js.Value) {
+	if o.Type() != js.TypeObject || o.IsNull() {
+		return
+	}
+	e := &m.Econ
+	e.EnergyMake = float32(getFloat(o, "energyMake"))
+	e.MetalMake = float32(getFloat(o, "metalMake"))
+	e.EnergyUse = float32(getFloat(o, "energyUse"))
+	e.ExtractsMetal = float32(getFloat(o, "extractsMetal"))
+	e.MakesMetal = float32(getFloat(o, "econMakesMetal"))
+	e.WindGenerator = float32(getFloat(o, "windGenerator"))
+	e.TidalGenerator = float32(getFloat(o, "tidalGenerator"))
+	e.EnergyStorage = float32(getFloat(o, "energyStorage"))
+	e.MetalStorage = float32(getFloat(o, "metalStorage"))
+	e.BuildTime = int32(getInt(o, "econBuildTime"))
+	if wt := getInt(o, "econWorkerTime"); wt > 0 {
+		e.WorkerTime = uint32(wt)
+	}
+	e.BuildCostEnergy = float32(getFloat(o, "buildCostEnergy"))
+	e.BuildCostMetal = float32(getFloat(o, "buildCostMetal"))
+	e.ManaIncome = float32(getFloat(o, "manaIncome"))
+	e.ManaStorage = float32(getFloat(o, "manaStorage"))
+	e.BuildCost = float32(getFloat(o, "buildCost"))
+	e.BuildTimeF = float32(getFloat(o, "buildTimeF"))
+	e.BuildTimeRecip = float32(getFloat(o, "buildTimeRecip"))
+	e.WorkerTimeF = float32(getFloat(o, "workerTimeF"))
+	e.HealTime = float32(getFloat(o, "healTime"))
 }
 
 func weaponFromJS(o js.Value) sim.WeaponMeta {
@@ -114,7 +242,88 @@ func weaponFromJS(o js.Value) sim.WeaponMeta {
 		Tracks:          getBool(o, "tracks"),
 		SelfProp:        getBool(o, "selfProp"),
 		Ballistic:       getBool(o, "ballistic"),
+		NoExplode:       getBool(o, "noExplode"),
+
+		// Exact firing-cycle / damage fields from the studio's shared combat
+		// enrichment (games.EnrichCombatMeta), so browser combat matches the
+		// host: the tick-domain reload/burst/decay figures, the absolute TA
+		// per-target [DAMAGE] table (DamageDefault + DamageTable) or the TA:K
+		// per-category fractional multipliers (DamageMult), and the TA:K
+		// behavior classes (melee / instant / paralyze / mind-control).
+		DamageDefault:     int(getFloat(o, "damageDefault")),
+		DamageTable:       damageTableFromJS(o.Get("damage")),
+		DamageMult:        damageMultFromJS(o.Get("damageMult")),
+		EdgeEffectiveness: getFloat(o, "edgeEffectiveness"),
+		ReloadTicks:       getInt(o, "reloadTicks"),
+		BurstRateTicks:    getInt(o, "burstRateTicks"),
+		RandomDecayTicks:  getInt(o, "randomDecayTicks"),
+		MinBarrelSin:      getFloat(o, "minBarrelSin"),
+		SelfSplash:        getBool(o, "selfSplash"),
+		Turret:            getBool(o, "turret"),
+		Melee:             getBool(o, "melee"),
+		Instant:           getBool(o, "instant"),
+		MindControl:       getBool(o, "mindControl"),
+		Paralyzer:         getBool(o, "paralyzer"),
+		ManaPerShot:       getFloat(o, "manaPerShot"),
+		Stockpile:         getBool(o, "stockpile"),
+		Targetable:        getBool(o, "targetable"),
+		Interceptor:       getBool(o, "interceptor"),
+		CoverageWU:        getInt(o, "coverage"),
 	}
+}
+
+// damageTableFromJS reads the weapon's absolute per-target [DAMAGE] map (TA)
+// into the lower-cased victim→points table the combat path matches on. The
+// "default" key is the fallback the WeaponMeta.Damage/DamageDefault fields
+// already carry, so it is dropped from the table (a hit REPLACES the default).
+func damageTableFromJS(o js.Value) map[string]int {
+	if o.Type() != js.TypeObject || o.IsNull() {
+		return nil
+	}
+	keys := objectKeys(o)
+	if len(keys) == 0 {
+		return nil
+	}
+	var out map[string]int
+	for _, k := range keys {
+		if k == "default" {
+			continue
+		}
+		if out == nil {
+			out = map[string]int{}
+		}
+		out[k] = int(getFloat(o, k))
+	}
+	return out
+}
+
+// damageMultFromJS reads the TA:K per-category fractional multiplier map into
+// the victim-category→scale table the TA:K damage path applies against the
+// weapon default.
+func damageMultFromJS(o js.Value) map[string]float64 {
+	if o.Type() != js.TypeObject || o.IsNull() {
+		return nil
+	}
+	keys := objectKeys(o)
+	if len(keys) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(keys))
+	for _, k := range keys {
+		out[k] = getFloat(o, k)
+	}
+	return out
+}
+
+// objectKeys returns a plain JS object's own enumerable keys via Object.keys.
+func objectKeys(o js.Value) []string {
+	arr := js.Global().Get("Object").Call("keys", o)
+	n := arr.Length()
+	out := make([]string, n)
+	for i := 0; i < n; i++ {
+		out[i] = arr.Index(i).String()
+	}
+	return out
 }
 
 // blastFromJS reads a resolved death-blast stat block off the unit meta.
@@ -680,6 +889,12 @@ func snapshotToJS(s frame.Snapshot) js.Value {
 		"projos": projos,
 		"events": events,
 	}
+	if len(s.Features) > 0 {
+		out["features"] = featuresToJS(s.Features)
+	}
+	if v := visibilityToJS(s.Visibility); !v.IsUndefined() {
+		out["visibility"] = v
+	}
 	// Per-side resource usage for the HUD (infinite pools — display only).
 	if len(s.Resources) > 0 {
 		res := make([]any, 0, len(s.Resources))
@@ -842,13 +1057,96 @@ func snapshotToPackedJS(s frame.Snapshot) js.Value {
 	for i := range s.Events {
 		events = append(events, eventToJS(&s.Events[i]))
 	}
-	return js.ValueOf(map[string]any{
+	out := map[string]any{
 		"tick":        int(s.Tick),
 		"unitsPacked": arr,
 		"names":       names,
 		"projos":      projos,
 		"events":      events,
+	}
+	if len(s.Features) > 0 {
+		out["features"] = featuresToJS(s.Features)
+	}
+	return js.ValueOf(out)
+}
+
+// featuresToJS marshals the placed map features (scenery, metal patches, sacred
+// stones, wrecks) the render lane draws and offers as reclaim/resurrect
+// targets. The shape mirrors the sim.Feature fields the render agent consumes:
+//
+//	{ id, name, kind, x, y, z, heading, headingRad, hp, owner, blocking,
+//	  reclaimable, reclaimMetal, reclaimEnergy, deadName }
+//
+// kind: 0 prop, 1 metalPatch, 2 wreck, 3 sacredSite. Feature ids live in a
+// high range (>= 0x40000000) disjoint from unit ids, so a reclaim order can
+// carry a feature id in the same target field a unit id would.
+func featuresToJS(fs []frame.FeatureState) []any {
+	out := make([]any, 0, len(fs))
+	for i := range fs {
+		f := &fs[i]
+		out = append(out, map[string]any{
+			"id":            int(f.ID),
+			"name":          f.Name,
+			"kind":          int(f.Kind),
+			"x":             f.Pos.X.Float(),
+			"y":             f.Pos.Y.Float(),
+			"z":             f.Pos.Z.Float(),
+			"heading":       int(headingToWire(f.Heading)),
+			"headingRad":    fixed.AngleToRadians(headingToWire(f.Heading)),
+			"hp":            f.HP,
+			"owner":         f.Owner,
+			"blocking":      f.Blocking,
+			"reclaimable":   f.Reclaimable,
+			"reclaimMetal":  f.ReclaimMetal,
+			"reclaimEnergy": f.ReclaimEnergy,
+			"deadName":      f.DeadName,
+		})
+	}
+	return out
+}
+
+// visibilityToJS marshals the per-side fog-of-war grid the render lane draws.
+// The shape is:
+//
+//	{ cols, rows, cellWU, sides: [ { side, sight, radar, explored } ] }
+//
+// where each of sight / radar / explored is a row-major Uint8Array of length
+// cols*rows — 1 where the layer covers cell (col,row), 0 elsewhere. Cell
+// (col,row) covers world X in [col*cellWU, (col+1)*cellWU) and likewise Z.
+// The renderer picks its viewer side's entry to draw the sight/radar mask and
+// dims the explored-but-not-visible cells. Undefined when no map is installed
+// (no fog without terrain). Read-only render state; never networked.
+func visibilityToJS(v *frame.VisibilityState) js.Value {
+	if v == nil || len(v.Sides) == 0 {
+		return js.Undefined()
+	}
+	sides := make([]any, 0, len(v.Sides))
+	for i := range v.Sides {
+		sv := &v.Sides[i]
+		sides = append(sides, map[string]any{
+			"side":     sv.Side,
+			"sight":    bytesToJS(sv.Sight),
+			"radar":    bytesToJS(sv.Radar),
+			"explored": bytesToJS(sv.Explored),
+		})
+	}
+	return js.ValueOf(map[string]any{
+		"cols":   v.Cols,
+		"rows":   v.Rows,
+		"cellWU": v.CellWU.Float(),
+		"sides":  sides,
 	})
+}
+
+// bytesToJS copies a Go byte slice into a fresh Uint8Array, or null when
+// empty, for the fog-layer transfer.
+func bytesToJS(b []uint8) js.Value {
+	if len(b) == 0 {
+		return js.Null()
+	}
+	arr := js.Global().Get("Uint8Array").New(len(b))
+	js.CopyBytesToJS(arr, b)
+	return arr
 }
 
 func unitToJS(u *frame.UnitState) map[string]any {
@@ -862,6 +1160,10 @@ func unitToJS(u *frame.UnitState) map[string]any {
 		"z":              u.Pos.Z.Float(),
 		"heading":        int(headingToWire(u.Heading)),
 		"headingRad":     fixed.AngleToRadians(headingToWire(u.Heading)),
+		"pitch":          int(u.Pitch),
+		"roll":           int(u.Roll),
+		"pitchRad":       fixed.AngleToRadians(u.Pitch),
+		"rollRad":        fixed.AngleToRadians(u.Roll),
 		"speed":          u.Speed.Float(),
 		"health":         u.Health.Float(),
 		"dead":           u.Dead,
@@ -874,6 +1176,12 @@ func unitToJS(u *frame.UnitState) map[string]any {
 		"fireMode":       int(u.FireMode),
 		"selfDestructMs": int(u.SelfDestructMs),
 		"piecesPacked":   pieces,
+		// Per-side vision bitmasks (bit s = visible to / detected by side s).
+		// The renderer, knowing its viewer side, draws the full model when the
+		// visible bit is set, a radar blip when only the detected bit is set,
+		// and hides the unit otherwise (engine/sim/sight.go).
+		"visibleMask":  int(u.VisibleMask),
+		"detectedMask": int(u.DetectedMask),
 	}
 	// Transport links, for the cargo badge + carried-unit gestures.
 	if u.CarriedBy != 0 {

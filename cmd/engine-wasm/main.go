@@ -59,9 +59,17 @@ func main() {
 		"submitStance":       js.FuncOf(submitStance),
 		"submitSelfDestruct": js.FuncOf(submitSelfDestruct),
 		"submitLoad":         js.FuncOf(submitLoad),
+		"submitKamikaze":     js.FuncOf(submitKamikaze),
+		"sideDefeated":       js.FuncOf(sideDefeated),
 		"submitRepair":       js.FuncOf(submitRepair),
+		"submitReclaim":      js.FuncOf(submitReclaim),
+		"submitResurrect":    js.FuncOf(submitResurrect),
 		"submitUnload":       js.FuncOf(submitUnload),
 		"setTerrain":         js.FuncOf(setTerrain),
+		"setRoad":            js.FuncOf(setRoad),
+		"addFeature":         js.FuncOf(addFeature),
+		"removeFeature":      js.FuncOf(removeFeatureBridge),
+		"featureAt":          js.FuncOf(featureAtBridge),
 		"scheduleAt":         js.FuncOf(scheduleAt),
 		"restore":            js.FuncOf(restore),
 		"step":               js.FuncOf(step),
@@ -115,8 +123,15 @@ func main() {
 	select {}
 }
 
-// create(seed, inputDelay, spawnResolver?) -> handle. spawnResolver is an
-// optional JS function (name) -> metaObject used to back Spawn orders.
+// create(seed, inputDelay, spawnResolver?, econModel?, monarchDeath?) -> handle.
+// spawnResolver is an optional JS function (name) -> metaObject used to back
+// Spawn orders. econModel selects the per-side resource law the world runs —
+// 0 = TA (metal + energy), 1 = TA:K (single mana pool) — matching
+// sim.EconomyModel's ordering. monarchDeath is the TA:K MonarchDeath lobby
+// option (boolean, default false): with it on, a side whose monarch dies loses
+// every remaining unit. The studio threads its running game through it so a
+// TA:K sandbox meters mana and a TA one meters metal/energy, exactly as the
+// authoritative host does.
 func create(_ js.Value, args []js.Value) any {
 	seed := uint32(0)
 	delay := uint64(0)
@@ -130,8 +145,18 @@ func create(_ js.Value, args []js.Value) any {
 	if len(args) > 2 && args[2].Type() == js.TypeFunction {
 		inst.resolve = args[2]
 	}
+	econ := sim.EconomyTA
+	if len(args) > 3 && args[3].Type() == js.TypeNumber && args[3].Int() == int(sim.EconomyTAK) {
+		econ = sim.EconomyTAK
+	}
+	// The MonarchDeath lobby option (TA:K): a 5th boolean arg. Off by default
+	// ("Monarch Expendable").
+	monarchDeath := len(args) > 4 && args[4].Type() == js.TypeBoolean && args[4].Bool()
 	inst.rt = script.NewRuntime(seed)
-	w := sim.New(sim.Config{Seed: seed, Spawn: inst.spawnFunc()})
+	// Share the script runtime's MINSTD stream with the world so COB RAND and
+	// world draws consume one generator in call order — the engines' single-
+	// stream discipline the fidelity harness measures against.
+	w := sim.New(sim.Config{Seed: seed, Spawn: inst.spawnFunc(), Rand: inst.rt.Rand(), Economy: econ, MonarchDeath: monarchDeath})
 	inst.world = w
 	inst.sess = session.New(session.Config{World: w, Runtime: inst.rt, InputDelay: delay})
 	id := nextID
@@ -348,6 +373,90 @@ func submitRepair(_ js.Value, args []js.Value) any {
 	return int(inst.sess.Submit(order.Repair(uint32(args[1].Int()), uint32(args[2].Int()))))
 }
 
+// submitReclaim(handle, unitIds[], targetUnitId) -> execTick. Sends the
+// reclaimers to consume the target unit / wreck / feature for resources.
+func submitReclaim(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return 0
+	}
+	ids := uint32Slice(args[1])
+	return int(inst.sess.Submit(order.Reclaim(ids, uint32(args[2].Int()))))
+}
+
+// submitResurrect(handle, builderId, featureId, targetBuildTime) arms a
+// resurrect channel: a canresurrect builder raises the wreck named by featureId
+// back into its dead unit type (whose buildtime sets the channel length). The
+// feature id is the high-range id the feature snapshot exports.
+func submitResurrect(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return false
+	}
+	inst.world.ApplyResurrect(uint32(args[1].Int()), uint32(args[2].Int()), args[3].Float())
+	return true
+}
+
+// addFeature(handle, {name, kind, x, z, heading, footprintX, footprintZ,
+// metal, energy, maxHP, blocking, reclaimable, indestructible, sacredSite,
+// geothermal, featureDead, owner}) places a map feature (scenery, metal patch,
+// sacred site, geothermal vent) and returns its id. kind: 0 prop, 1 metalPatch,
+// 2 wreck, 3 sacredSite. Metal patches stamp their metal into the cell grid so
+// the extractor income picks them up; a geothermal vent (geothermal:true) marks
+// the site a geothermal plant may be founded over. Owner defaults to -1 (a
+// neutral map feature).
+func addFeature(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return 0
+	}
+	o := args[1]
+	owner := -1
+	if v := o.Get("owner"); !v.IsUndefined() && !v.IsNull() {
+		owner = v.Int()
+	}
+	meta := &sim.FeatureMeta{
+		Name:           getString(o, "name"),
+		FootprintX:     getInt(o, "footprintX"),
+		FootprintZ:     getInt(o, "footprintZ"),
+		Metal:          getInt(o, "metal"),
+		Energy:         getInt(o, "energy"),
+		MaxHP:          getInt(o, "maxHP"),
+		Blocking:       getBool(o, "blocking"),
+		Reclaimable:    getBool(o, "reclaimable"),
+		Indestructible: getBool(o, "indestructible"),
+		SacredSite:     getFloat(o, "sacredSite"),
+		Geothermal:     getBool(o, "geothermal"),
+		FeatureDead:    getString(o, "featureDead"),
+	}
+	at := fixed.Vec2{X: fixed.FromFloat(o.Get("x").Float()), Z: fixed.FromFloat(o.Get("z").Float())}
+	kind := sim.FeatureKind(getInt(o, "kind"))
+	id := inst.world.AddFeature(meta.Name, meta, kind, at, int32(getInt(o, "heading")), owner)
+	return int(id)
+}
+
+// featureAtBridge(handle, x, z) resolves the feature id under a world point (the
+// reclaim/resurrect cursor hit-test), or 0 when nothing is there.
+func featureAtBridge(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return 0
+	}
+	id := inst.world.FeatureIDAt(fixed.FromFloat(args[1].Float()), fixed.FromFloat(args[2].Float()))
+	return int(id)
+}
+
+// removeFeatureBridge(handle, featureId) deletes a placed feature (a map editor
+// / scenario tool clearing scenery). Returns true.
+func removeFeatureBridge(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return false
+	}
+	inst.world.RemoveFeature(uint32(args[1].Int()))
+	return true
+}
+
 // submitLoad(handle, transportIds[], targetUnit) -> execTick. Sends the
 // transports to pick up the target unit.
 func submitLoad(_ js.Value, args []js.Value) any {
@@ -356,6 +465,27 @@ func submitLoad(_ js.Value, args []js.Value) any {
 		return 0
 	}
 	return int(inst.sess.Submit(order.Load(uint32Slice(args[1]), uint32(args[2].Int()))))
+}
+
+// submitKamikaze(handle, unitIds[], targetId) -> execTick. Sends kamikaze units
+// to close on the target and self-destruct on top of it.
+func submitKamikaze(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return 0
+	}
+	return int(inst.sess.Submit(order.Kamikaze(uint32Slice(args[1]), uint32(args[2].Int()))))
+}
+
+// sideDefeated(handle, side) -> bool. Reports whether a side has been defeated
+// (its monarch died with the MonarchDeath option on) — the render/UI reads it
+// to draw the defeat banner.
+func sideDefeated(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return false
+	}
+	return inst.world.SideDefeated(args[1].Int())
 }
 
 // submitUnload(handle, transportIds[], tx, tz) -> execTick. Sends the
@@ -389,6 +519,17 @@ func setTerrain(_ js.Value, args []js.Value) any {
 		HeightScale: fixed.FromFloat(o.Get("heightScale").Float()),
 		SeaLevel:    o.Get("seaLevel").Int(),
 	}
+	// OTA terrain flags: lavaworld (below-sea cells unpathable) and the
+	// water/lava attrition keys. Absent fields default off.
+	if v := o.Get("lavaWorld"); !v.IsUndefined() && !v.IsNull() {
+		t.LavaWorld = v.Bool()
+	}
+	if v := o.Get("waterDoesDamage"); !v.IsUndefined() && !v.IsNull() {
+		t.WaterDoesDamage = v.Bool()
+	}
+	if v := o.Get("waterDamage"); !v.IsUndefined() && !v.IsNull() {
+		t.WaterDamage = v.Int()
+	}
 	data := o.Get("data")
 	n := data.Get("length").Int()
 	if n < t.W*t.H {
@@ -403,8 +544,29 @@ func setTerrain(_ js.Value, args []js.Value) any {
 			js.CopyBytesToGo(t.Void, voids)
 		}
 	}
+	// Optional per-cell road raster (TA:K): 1 = road, 0 = cross-country. The
+	// studio derives it from the map's TA:K terrain-type data; TA maps omit it.
+	if roads := o.Get("roads"); !roads.IsUndefined() && !roads.IsNull() {
+		rn := roads.Get("length").Int()
+		if rn >= t.W*t.H {
+			t.Road = make([]uint8, rn)
+			js.CopyBytesToGo(t.Road, roads)
+		}
+	}
 	inst.world.SetTerrain(t)
 	return true
+}
+
+// setRoad(handle, cx, cz, on) marks (on=true) or clears a single terrain cell
+// as road, allocating the road raster on first use — the incremental hook the
+// studio uses to paint roads onto an already-installed map. Returns true on
+// success.
+func setRoad(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return false
+	}
+	return inst.world.SetRoadCell(args[1].Int(), args[2].Int(), args[3].Bool())
 }
 
 // submitStop(handle, unitIds[]) -> execTick.

@@ -129,17 +129,32 @@ func (w *World) Step(rt Runtime) {
 		w.stepBuilder(u)
 		w.stepStance(u)
 		w.stepAttack(u)
+		// A kamikaze run overrides the ordinary move/attack: it closes on its
+		// target and detonates on arrival (specials.md §6.1.3).
+		if u.kamiTarget != 0 {
+			w.stepKamikaze(u)
+			if u.Dead {
+				continue
+			}
+		}
 		// Weapons fire before the unit moves — the engines' per-unit phase
 		// order — so a shot launches from the pre-integration position.
 		w.stepWeapons(u)
 		w.stepMovement(u)
 	}
 	w.drainTransfers()
+	// A monarch death queued a side defeat this tick: kill the fallen side's
+	// remaining units (specials.md §7.3).
+	w.drainDefeats()
 	w.stepWaterDamage()
 	w.pinCargo()
 	w.stepYards()
 	w.stepCollisions()
 	w.stepProjectiles()
+	// Anti-nuke interception: after the shots fly, interceptors fire at any
+	// incoming targetable enemy projectile inside their square coverage box
+	// (specials.md §6.1.2).
+	w.stepInterceptors()
 	w.stepBuildDecay()
 	// TA settles its economy once per second — every unit's window of
 	// income and posted demand pays out with the shared proportional
@@ -1599,6 +1614,12 @@ func (w *World) stepWeapons(u *Unit) {
 	for slot := range u.weapons {
 		s := &u.weapons[slot]
 		wm := u.Meta.Weapons[slot]
+		// An interceptor slot never fires at units through the ordinary weapon
+		// path: it acquires live projectiles instead (stepInterceptors,
+		// specials.md §6.1.2), so it is skipped here entirely.
+		if wm.Interceptor {
+			continue
+		}
 		// A committed TA:K shot waits for the fire animation's release frame
 		// even if the slot's target has since cleared.
 		if s.launchPending {
@@ -1680,6 +1701,17 @@ func (w *World) stepWeapons(u *Unit) {
 				continue
 			}
 		}
+		// TA:K spell gate: a mana-priced weapon refuses to aim/fire unless the
+		// caster's PRIVATE pool holds the veteran-discounted ManaPerShot
+		// (specials.md §7.1 aim tolerance) — an empty caster cannot cast.
+		if w.econModel == EconomyTAK && wm.ManaPerShot > 0 && u.privMana < float32(spellManaCost(u, &wm)) {
+			continue
+		}
+		// Stockpile gate: a stockpiled weapon (nuke) launches only from built
+		// stock — no stock, no launch (specials.md §6.1.1).
+		if wm.Stockpile && u.weapons[slot].stock <= 0 {
+			continue
+		}
 		// Aircraft must have the airframe lined up within the weapon's firing arc
 		// before they open fire (no rotating turret); and a bomber only starts a
 		// run once it is inside the drop window so the string straddles the target.
@@ -1703,6 +1735,9 @@ func (w *World) stepWeapons(u *Unit) {
 		}
 		s.lastFireMs = w.simMs
 		s.reloadTicks = scaledReloadTicks(u, &wm)
+		// Firing breaks cloak: the shot forces the unit visible for the fire
+		// hold (specials.md §5.1).
+		w.breakCloakOnFire(u)
 		// Per-shot economy drain (energypershot / metalpershot), after the
 		// launch commitment: all-or-nothing straight from the TA pools,
 		// bypassing the settle. The gate above already confirmed the stock.
@@ -1711,6 +1746,20 @@ func (w *World) stepWeapons(u *Unit) {
 			if w.taConsumeShot(u.Side, e, m) {
 				w.tallySpend(u.Side, float64(m), float64(e), 0)
 			}
+		}
+		// TA:K spell drain: the caster's private mana pays the veteran-discounted
+		// ManaPerShot at the launch commitment (specials.md §7.1 — the private
+		// pool, not the player pool).
+		if w.econModel == EconomyTAK && wm.ManaPerShot > 0 {
+			u.privMana -= float32(spellManaCost(u, &wm))
+			if u.privMana < 0 {
+				u.privMana = 0
+			}
+		}
+		// Stockpile decrement: launching a stockpiled weapon spends one round of
+		// built stock (specials.md §6.1.1) — no E/M charge at fire.
+		if wm.Stockpile && u.weapons[slot].stock > 0 {
+			u.weapons[slot].stock--
 		}
 		aimPoint := fixed.Vec3{X: targetPos.X, Y: targetY, Z: targetPos.Z}
 		// Recoil / muzzle-flash animation: the COB Fire thread moves the barrel
