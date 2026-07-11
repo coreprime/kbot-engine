@@ -2102,7 +2102,15 @@ func (w *World) aimWeapon(u *Unit, s *weaponSlot, slot int, targetPos fixed.Vec2
 	// restore-after-delay thread never returns the turret home while a target is
 	// still tracked. A cadence refresh keeps the same bearing, so it must not
 	// re-gate fire — only an actual drift re-arms aimReady.
-	refreshDue := w.simMs-s.aimLastIssueMs >= aimRefreshMs
+	//
+	// A command-fire weapon is exempt from the cadence refresh: it discharges
+	// once per explicit order, and its aim script latches the barrel pose in a
+	// COB static that only clears on the target-cleared handler (the commander's
+	// disintegrator arm holds up on aimtype until then), so it has no
+	// restore-after-delay thread for the cadence to counter. Re-issuing the aim
+	// thread on the timer only re-runs that latch/aim script — re-playing the
+	// aim/fire pose while the shot sits gated — so keep it strictly drift-driven.
+	refreshDue := !u.Meta.Weapons[slot].CommandFire && w.simMs-s.aimLastIssueMs >= aimRefreshMs
 	if drifted || refreshDue {
 		s.aimIssued = true
 		s.aimHeading = heading
