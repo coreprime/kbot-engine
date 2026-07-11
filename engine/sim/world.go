@@ -2200,7 +2200,8 @@ func (u *Unit) busy() bool {
 // build job is a current order too, even though it does not set hasMove/hasAttack.
 func (u *Unit) working() bool {
 	return u.busy() || u.reclaimTarget != 0 || u.reclaimFeature != 0 ||
-		u.repairTarget != 0 || u.capTarget != 0 || u.buildState != buildIdle
+		u.repairTarget != 0 || u.capTarget != 0 || u.resurrectFeature != 0 ||
+		u.buildState != buildIdle
 }
 
 // enqueue appends a deferred order, bounded by maxOrderQueue (excess orders
