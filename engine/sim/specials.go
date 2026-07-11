@@ -794,6 +794,15 @@ func (w *World) Cloaked(id uint32) bool {
 	return false
 }
 
+// UnitActive reports a unit's ACTIVE bit (the economy-authoritative on/off
+// state the metal-maker toggle and the production suites read).
+func (w *World) UnitActive(id uint32) bool {
+	if u := w.units[id]; u != nil {
+		return u.active
+	}
+	return false
+}
+
 // ParalyzeTicks reports a unit's remaining paralyze tick count.
 func (w *World) ParalyzeTicks(id uint32) int {
 	if u := w.units[id]; u != nil {

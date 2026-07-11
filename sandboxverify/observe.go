@@ -214,6 +214,12 @@ func (st *runState) sampleUnit(alias, obs string) (int64, bool, string) {
 		}
 		return 0, true, ""
 	}
+	if obs == "unit.active" {
+		if st.world.UnitActive(id) {
+			return 1, true, ""
+		}
+		return 0, true, ""
+	}
 	if obs == "unit.paralyze_ticks" {
 		return int64(st.world.ParalyzeTicks(id)), true, ""
 	}

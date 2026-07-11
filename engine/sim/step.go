@@ -170,6 +170,10 @@ func (w *World) Step(rt Runtime) {
 		w.stepManaFinalize()
 	} else if w.tick%taSettleTicks == 0 {
 		w.settleTA()
+		// The metal-maker auto-toggle scans on the same 30-frame boundary,
+		// after the settle publishes the net energy rate and the pools it
+		// reads (economy.md §1.7).
+		w.stepMetalMakerToggle()
 	}
 	// The ambient wind re-roll runs last (the engines' phase 8, after the
 	// player-economy phase): a settle this tick has already read the wind the

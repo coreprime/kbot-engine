@@ -1,0 +1,50 @@
+# TA metal-maker 2:1 auto-toggle (off branch): a metal maker turns itself OFF
+# the settle its stored metal is at least half the stored energy, and takes NO
+# RNG draw in that branch (the shared MINSTD stream is untouched).
+# Ground truth: economy.md §1.7 (the auto-toggle), §1.5 branch 2 (maker income
+# gated on the ACTIVE bit).
+name: ta-econ-maker-toggle-off
+game: ta
+system: economy
+spec: economy.md §1.7, §1.5
+description: >-
+  A lone ARMMAKR (MakesMetal=1, EnergyUse=60, ActivateWhenBuilt) opens with the
+  skirmish-default 1000 metal / 1000 energy. At the first settle scan (frame 30)
+  2*storedMetal (2000) >= storedEnergy, so the maker switches off and produces
+  no metal thereafter. The off branch draws nothing, so the only MINSTD draws in
+  the run are the unit's two spawn draws.
+seed: 1
+duration: 40
+units:
+  - alias: maker
+    type: armmakr
+    side: 0
+    pos: [200, 200]
+    heading: 0
+checks:
+  - at: 29
+    unit: maker
+    observable: unit.active
+    expect: 1
+    label: maker starts on (ActivateWhenBuilt)
+    derivation: |
+      ARMMAKR declares ActivateWhenBuilt=1, so the completed maker spawns
+      ACTIVE. The first toggle scan does not run until frame 30.
+  - at: 30
+    unit: maker
+    observable: unit.active
+    expect: 0
+    label: 2:1 rule switches the maker off
+    derivation: |
+      At the frame-30 settle, stored metal is at its 1000 cap and stored
+      energy is 1000 - 60 = 940. The toggle scan (after the settle) tests
+      2*1000 = 2000 >= 940 -> true, so ACTIVE is cleared. No rand(5) is
+      drawn in this branch.
+  - at: 40
+    observable: world.rng_draws
+    expect: 2
+    label: the off branch takes no RNG draw
+    derivation: |
+      Unit init consumes 2 MINSTD draws (one unit). The maker's toggle stays
+      in the off branch every scan (2*storedMetal >= storedEnergy holds), so
+      no rand(5) is ever drawn. Wind is calm (no range configured). Total 2.

@@ -1,0 +1,53 @@
+# TA metal-maker 2:1 auto-toggle (on branch): when stored metal is well below
+# half the stored energy and the net energy rate is positive, the maker's scan
+# draws rand(5) from the shared MINSTD stream each settle and keeps the maker
+# running. This pins the RNG draw order — one draw per maker per 30-frame scan.
+# Ground truth: economy.md §1.7 (the auto-toggle + its rand(5) draw), substrate
+# RNG small-bound rule.
+name: ta-econ-maker-toggle-on
+game: ta
+system: economy
+spec: economy.md §1.7
+description: >-
+  An ARMMAKR (MakesMetal=1, EnergyUse=60) beside an ARMFUS (EnergyMake=1000),
+  both ActivateWhenBuilt, opening with empty pools. Stored metal stays far below
+  half the stored energy and net energy (1000 - 60) is strongly positive, so the
+  toggle scan draws rand(5) every settle and the maker stays on. Ten settles ->
+  ten draws on top of the two spawns per unit.
+seed: 1
+duration: 310
+start_metal: -1
+start_energy: -1
+units:
+  - alias: maker
+    type: armmakr
+    side: 0
+    pos: [200, 200]
+    heading: 0
+  - alias: fus
+    type: armfus
+    side: 0
+    pos: [400, 400]
+    heading: 0
+checks:
+  - at: 305
+    unit: maker
+    observable: unit.active
+    expect: 1
+    label: maker stays on while energy is plentiful
+    derivation: |
+      Stored metal stays near zero and stored energy clamps to its cap, so
+      2*storedMetal < storedEnergy every scan and the maker never hits the
+      off branch. Net energy 1000 - 60 = 940 > 0, so each scan's rand(5)
+      (usually non-zero; a zero is a hold, leaving the already-on maker on)
+      keeps ACTIVE set.
+  - at: 305
+    observable: world.rng_draws
+    expect: 14
+    label: one rand(5) per settle scan
+    derivation: |
+      Two units spawn -> 4 MINSTD draws. Wind is calm (no draws). The maker's
+      toggle takes the on branch (net energy > 0) on all ten settles (frames
+      30..300), drawing rand(5) once each -> 10 draws. ARMFUS's own scan is
+      skipped (it has no makesmetal). Total 4 + 10 = 14.
+    missing_if_zero: true

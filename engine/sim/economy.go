@@ -317,6 +317,52 @@ func (w *World) settleTA() {
 	}
 }
 
+// stepMetalMakerToggle runs the TA metal-maker auto-toggle once per settle
+// (every 30 frames) after the pools have settled (economy.md §1.7): every
+// alive, fully-built structure with makesmetal ≠ 0 flips its ACTIVE bit by the
+// stored-resource balance and the last settle's net energy rate.
+//
+//	if 2·storedMetal ≥ storedEnergy            → ACTIVE = 0 (off, no draw)
+//	else if netEnergy > 0 and rand(5) ≠ 0      → ACTIVE = 1 (on)
+//
+// The rand(5) is a consumer of the shared MINSTD sim stream, drawn — in the
+// engines' order — only when the off condition fails AND the net energy rate is
+// positive (the && short-circuits before the draw otherwise). A 1-in-5 result
+// of zero is the skip: the maker holds its current state without toggling. The
+// scan therefore leaves an already-on maker on when it skips, so the draw
+// order is exact whether or not the state actually flips.
+func (w *World) stepMetalMakerToggle() {
+	for _, id := range w.order {
+		u := w.units[id]
+		if u == nil || u.Dead || u.Meta == nil || u.carriedBy != 0 ||
+			u.Side < 0 || u.Side >= maxSides {
+			continue
+		}
+		// Alive, complete, structure metal maker only.
+		if u.Meta.Econ.MakesMetal == 0 || u.Meta.CanMove || u.buildRem != 0 {
+			continue
+		}
+		p := &w.econTA[u.Side]
+		if 2*float64(p.stockM) >= float64(p.stockE) {
+			if u.active {
+				w.setActivation(u, false)
+			}
+			continue
+		}
+		// Net energy rate from the last settle (income minus requested
+		// expense); the rand(5) draw is gated behind it, matching the engine's
+		// short-circuit so the stream advances only when the rate is positive.
+		if float64(p.incomeE)-float64(p.expenseE) <= 0 {
+			continue
+		}
+		if w.rng.Bounded(5) != 0 {
+			if !u.active {
+				w.setActivation(u, true)
+			}
+		}
+	}
+}
+
 // taUnitIncomeTick is one unit's income pass at the settle, the branch
 // structure of the engine's per-unit resource tick.
 func (w *World) taUnitIncomeTick(u *Unit, prodE, prodM *float64) {
@@ -349,10 +395,10 @@ func (w *World) taUnitIncomeTick(u *Unit, prodE, prodM *float64) {
 			}
 		case ec.MakesMetal != 0:
 			// Metal maker: an energy stall in the previous window stops
-			// metal output in this one. The engine's 2:1 stored-metal
-			// auto-toggle draws rand(5) from the shared sim stream; the
-			// sandbox leaves the toggle unmodelled rather than perturb the
-			// stream's draw order (seam: revisit with the RNG ledger).
+			// metal output in this one. The 2:1 stored-metal auto-toggle
+			// (stepMetalMakerToggle, run once per settle) flips the ACTIVE
+			// bit this branch gates on, so a maker toggled off produces no
+			// metal and posts no energyuse until the balance swings back.
 			if energyOK {
 				*prodM += float64(int32(ec.MakesMetal))
 			}
