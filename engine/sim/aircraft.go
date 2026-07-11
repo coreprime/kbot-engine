@@ -13,11 +13,17 @@ const (
 	atkEgress
 )
 
-// Aircraft flight is a behavioural stand-in (locomotion spec §10.7): the real
-// law is the drag/vertical-slew/steering-accel model of §6.1, a later block.
-// The stand-in keeps the sandbox's invented defaults and clamps, expressed on
-// the per-frame speed axis the rest of the sim now runs on. Air is not in the
-// ground-fidelity critical path.
+// Aircraft flight (locomotion spec §6.1 / §10.7). The VERTICAL axis now runs
+// the exact §6.1 law — the vy = clamp(targetY−posY, ±max(speed>>2, 1 wu/frame))
+// slew in stepAltitude. The HORIZONTAL flight below is still a behavioural
+// stand-in: the engine's §6.1 steering-acceleration-vector law (a =
+// 2·accel/max(distXZ, floor); desired = (target−pos)·a − v, clamped to |accel|)
+// caps the effective cruise at ~2·accel — far below maxvelocity — and the
+// decompile leaves its overspeed trim (UNKNOWN-5a) and steering sign/floor
+// unresolved, so a literal port crawls and never arrives. The stand-in keeps
+// the sandbox's flyable defaults/clamps on the per-frame speed axis, which
+// §10.7 accepts as broad-motion-compatible; air is not in the ground-fidelity
+// critical path.
 
 // airMaxSpeed / airTurnPerFrame / airAccel / airBrake are the stand-in's
 // per-frame kinematics: raw FBI values with fallback defaults for aircraft

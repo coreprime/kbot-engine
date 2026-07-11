@@ -1452,26 +1452,18 @@ func (w *World) stepAltitude(u *Unit) {
 	if airborne {
 		altTarget = ground + cruise
 	}
-	accel := u.Meta.Accel
-	if accel <= 0 {
-		accel = fixed.FromFloat(0.1)
-	}
-	brake := u.Meta.BrakeRate
-	if brake <= 0 {
-		brake = fixed.FromFloat(0.1)
-	}
-	climbRate := fixed.Clamp(accel.Mul(fixed.FromInt(100)), fixed.FromInt(12), fixed.FromInt(80))
-	descendRate := fixed.Clamp(brake.Mul(fixed.FromInt(10)), fixed.FromInt(8), fixed.FromInt(40))
+	// Vertical slew, the exact TA aircraft law (locomotion.md §6.1 step 3):
+	// vy = clamp(targetY − posY, ±max(speed>>2, 1 wu/frame)) — at least one
+	// world unit of climb/descend authority per frame, more at speed. The
+	// grounded↔airborne edge above (takeoff/land pose) and the pad/land-spot
+	// horizontal logic sit on top of this and are unchanged.
 	cur := u.PosY
-	rate := descendRate
-	if altTarget > cur {
-		rate = climbRate
-	}
-	step := perTick(rate)
-	if (altTarget - cur).Abs() <= step {
+	slew := fixed.Max(u.loco.Speed.Div(fixed.FromInt(4)), fixed.One)
+	diff := altTarget - cur
+	if diff.Abs() <= slew {
 		u.PosY = altTarget
 	} else {
-		u.PosY = fixed.Wrap32(cur + fixed.FromInt((altTarget - cur).Sign()).Mul(step))
+		u.PosY = fixed.Wrap32(cur + fixed.FromInt(diff.Sign()).Mul(slew))
 	}
 }
 
