@@ -1,0 +1,13 @@
+{
+  "name": "consume-engine-example",
+  "private": true,
+  "description": "Installs the published @coreprime/kbot-engine package and drives it headless in Node — a consumer smoke-test of the real artifact.",
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "@coreprime/kbot-engine": "^0.5.0"
+  }
+}
