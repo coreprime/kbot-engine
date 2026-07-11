@@ -93,6 +93,8 @@ export interface TerrainSpec {
   slopeScalePct?: number
   data: Uint8Array
   voids?: Uint8Array
+  /** Baseline OTA SurfaceMetal density (0-255) flooded across every cell. */
+  surfaceMetal?: number
 }
 
 /** Per-unit render state inside a Snapshot. */
@@ -186,7 +188,7 @@ export class Session {
   submitPatrol(unitIds: number[], x: number, z: number): number
   submitStance(unitIds: number[], moveMode: number, fireMode: number): number
   submitSelfDestruct(unitIds: number[]): number
-  submitRepair(builderId: number, targetUnitId: number): number
+  submitRepair(builderId: number, targetUnitId: number, queued?: boolean): number
   submitLoad(transportIds: number[], targetUnitId: number): number
   submitUnload(transportIds: number[], x: number, z: number): number
   canBuildAt(name: string, x: number, z: number): boolean

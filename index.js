@@ -148,8 +148,8 @@ export class Session {
     return this.#api.submitSelfDestruct(this.#handle, unitIds)
   }
 
-  submitRepair(builderId, targetUnitId) {
-    return this.#api.submitRepair(this.#handle, builderId, targetUnitId)
+  submitRepair(builderId, targetUnitId, queued = false) {
+    return this.#api.submitRepair(this.#handle, builderId, targetUnitId, queued)
   }
 
   submitLoad(transportIds, targetUnitId) {
