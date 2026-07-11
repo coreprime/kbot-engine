@@ -2144,9 +2144,9 @@ func (w *World) ApplyOrder(o order.Order) {
 		if u.Meta.CanMove {
 			// Mobile builder: a new job replaces any current one (the
 			// half-built buildee stays, inert, where it was abandoned — as
-			// in TA).
-			w.cancelBuild(u)
-			u.repairTarget = 0
+			// in TA). Any sibling work channel (repair/reclaim/capture/
+			// resurrect) is cleared so the build is the unit's sole job.
+			w.clearWorkChannels(u)
 			u.buildState = buildApproach
 			u.buildName = o.Name
 			u.buildSite = o.Target

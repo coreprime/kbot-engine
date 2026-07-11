@@ -78,6 +78,23 @@ func (u *Unit) absHP() int {
 	return hp
 }
 
+// clearWorkChannels cancels every active work channel on a unit so a freshly
+// armed job (build, repair, capture, reclaim, resurrect) becomes its SOLE
+// current work. The build/repair/capture/reclaim/resurrect channels are meant
+// to be mutually exclusive — one unit does one job at a time — so each arm
+// function calls this after its eligibility guards and before setting its own
+// channel. Without it a sibling channel left live from a prior order would keep
+// advancing alongside the new one (a con reclaiming while still healing, or a
+// buildee advancing while its builder reclaims — double resource drain).
+func (w *World) clearWorkChannels(u *Unit) {
+	w.cancelBuild(u)
+	u.repairTarget = 0
+	u.capTarget, u.capAccum, u.capTime = 0, 0, 0
+	u.reclaimTarget, u.reclaimAccum = 0, 0
+	u.reclaimFeature, u.reclaimFeatureTicks = 0, 0
+	u.resurrectFeature, u.resurrectAccum, u.resurrectChanTicks = 0, 0, 0
+}
+
 // applyCapture arms a capture channel: the capturer must cancapture and the
 // target must NOT itself cancapture (Commanders are uncapturable) and be fully
 // built. The channel time is fixed once, here at arming.
@@ -93,10 +110,10 @@ func (w *World) applyCapture(u *Unit, targetID uint32) {
 	if t.Meta.CanCapture || t.underConstruction() {
 		return
 	}
+	w.clearWorkChannels(u)
 	u.capTarget = targetID
 	u.capAccum = 0
 	u.capTime = captureTime(t)
-	u.repairTarget = 0
 	u.hasMove = false
 	u.hasAttack = false
 }
@@ -118,10 +135,9 @@ func (w *World) applyReclaim(u *Unit, targetID uint32) {
 	if t == nil || t.Dead || t == u || t.Meta == nil || t.Meta.CanCapture {
 		return
 	}
+	w.clearWorkChannels(u)
 	u.reclaimTarget = targetID
 	u.reclaimAccum = 0
-	u.reclaimFeature = 0
-	u.repairTarget = 0
 	u.hasMove = false
 	u.hasAttack = false
 }
@@ -142,11 +158,8 @@ func (w *World) applyRepair(u, b *Unit) {
 	if b.Side != u.Side || b.Health >= fixed.FromInt(100) {
 		return
 	}
-	w.cancelBuild(u)
+	w.clearWorkChannels(u)
 	u.repairTarget = b.ID
-	u.reclaimTarget = 0
-	u.reclaimFeature = 0
-	u.capTarget = 0
 	u.hasMove = false
 	u.hasAttack = false
 }
@@ -162,8 +175,7 @@ func (w *World) armBuildTarget(u, b *Unit) {
 		return
 	}
 	if b.underConstruction() {
-		w.cancelBuild(u)
-		u.repairTarget = 0
+		w.clearWorkChannels(u)
 		u.buildState = buildApproach
 		u.buildName = b.Name
 		u.buildSite = b.loco.Pos
@@ -184,8 +196,8 @@ func (w *World) applyFeatureReclaim(u *Unit, featureID uint32) {
 	if f == nil || f.Meta == nil || !f.Meta.Reclaimable || f.Meta.Indestructible {
 		return
 	}
+	w.clearWorkChannels(u)
 	u.reclaimFeature = featureID
-	u.reclaimTarget = 0
 	u.reclaimAccum = 0
 	u.reclaimFeatureTicks = featureReclaimTicks(f.Meta)
 	u.hasMove = false
@@ -206,9 +218,9 @@ func (w *World) applyResurrect(u *Unit, featureID uint32, targetBuildTime float6
 	if f == nil || f.Kind != FeatureWreck || f.DeadName == "" {
 		return
 	}
+	w.clearWorkChannels(u)
 	u.resurrectFeature = featureID
 	u.resurrectAccum = 0
-	u.repairTarget = 0
 	u.resurrectChanTicks = resurrectTicks(u.Meta.WorkerTime, targetBuildTime)
 	if u.resurrectChanTicks < 1 {
 		u.resurrectChanTicks = 1
