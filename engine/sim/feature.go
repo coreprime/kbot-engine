@@ -280,8 +280,21 @@ func (w *World) FeatureCount() int { return len(w.featureOrder) }
 // the cell grid — the engines never clear a stamped metal cell, and metal
 // patches are indestructible so they never reach this path anyway.
 func (w *World) removeFeature(id uint32) {
-	if _, ok := w.features[id]; !ok {
+	f, ok := w.features[id]
+	if !ok {
 		return
+	}
+	// A wreck is the client's render of its dead unit's corpse body (spawnWreck
+	// pinned that body's id in SourceUnit and left the body in w.order). When
+	// the wreck leaves the world by ANY path — reclaimed, resurrected, eroded,
+	// or torn down — the orphaned body must be reaped too, or w.order grows with
+	// every death for the rest of the game. Deferred through the same queue the
+	// reclaim path uses so the w.order mutation stays off any in-progress tick
+	// walk; ids are monotonic, so a body that vanishes first is a safe no-op.
+	if f.Kind == FeatureWreck && f.SourceUnit != 0 {
+		if body := w.units[f.SourceUnit]; body != nil && body.Dead {
+			w.pendingWreckReaps = append(w.pendingWreckReaps, f.SourceUnit)
+		}
 	}
 	delete(w.features, id)
 	for i, fid := range w.featureOrder {

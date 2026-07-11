@@ -461,13 +461,13 @@ func (w *World) stepFeatureReclaim(u *Unit) {
 	}
 	w.creditFeatureReclaim(u.Side, f.Meta)
 	w.emit(frame.Event{Kind: frame.EvDespawn, UnitID: f.ID, Anchor: f.Pos})
-	// A wreck the client draws as its dead unit's corpse model: dismiss that
-	// body too (a wreck-suppressing reason-5 death so no blast, no new wreck),
-	// then reap the entity after the tick walk finishes.
+	// A wreck the client draws as its dead unit's corpse model: raise the
+	// wreck-suppressing reason-5 death so the salvage effect plays with no
+	// blast and no new wreck. removeFeature queues the body's reap (deferred
+	// off the tick walk), the same path a resurrect or teardown now uses.
 	if f.Kind == FeatureWreck && f.SourceUnit != 0 {
 		if body := w.units[f.SourceUnit]; body != nil {
 			w.emit(frame.Event{Kind: frame.EvDeath, UnitID: f.SourceUnit, Anchor: f.Pos, SfxType: deathReasonReclaimed})
-			w.pendingWreckReaps = append(w.pendingWreckReaps, f.SourceUnit)
 		}
 	}
 	w.removeFeature(f.ID)

@@ -220,7 +220,6 @@ func TestWreckResurrect(t *testing.T) {
 
 	m := featureReclaimerMeta("necro")
 	cid := w.AddUnit("necro", m, nil, fixed.Vec2{X: fixed.FromInt(80), Z: fixed.FromInt(80)}, 0, 0)
-	unitsBefore := len(w.order)
 	w.ApplyResurrect(cid, wreck.ID, 100)
 	for i := 0; i < 400 && w.FeatureByID(wreck.ID) != nil; i++ {
 		w.Step(nil)
@@ -228,10 +227,7 @@ func TestWreckResurrect(t *testing.T) {
 	if w.FeatureByID(wreck.ID) != nil {
 		t.Fatalf("wreck not consumed by resurrect")
 	}
-	if len(w.order) <= unitsBefore {
-		t.Fatalf("resurrect did not spawn a unit (order len %d -> %d)", unitsBefore, len(w.order))
-	}
-	// The raised unit belongs to the resurrector's side.
+	// The raised unit belongs to the resurrector's side, and lives.
 	var raised *Unit
 	for _, id := range w.order {
 		if u := w.units[id]; u != nil && u.Name == "tank" && !u.Dead {
@@ -240,6 +236,11 @@ func TestWreckResurrect(t *testing.T) {
 	}
 	if raised == nil || raised.Side != 0 {
 		t.Fatalf("resurrected unit missing or wrong side")
+	}
+	// Consuming the wreck by resurrect reaps its orphaned corpse body too — the
+	// dead unit spawnWreck left in w.order must not linger past its wreck.
+	if w.UnitByID(vid) != nil {
+		t.Fatalf("resurrect left the wreck's corpse body (unit %d) orphaned in w.order", vid)
 	}
 }
 
