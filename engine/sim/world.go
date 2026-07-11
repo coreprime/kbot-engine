@@ -457,6 +457,13 @@ type World struct {
 	// that declares no wind produces no windgenerator income and no drift.
 	wind windState
 
+	// reproIdx is the ambient feature-reproduction scan cursor (world.md §1.5):
+	// one map cell examined per tick, the index decrementing W·H−1 → 0 and
+	// wrapping. Set when a terrain is installed (a flat grid has no cell field
+	// to scan). meteor tracks the CRT meteor-weather cadence (meteor.go).
+	reproIdx int
+	meteor   meteorState
+
 	// projectiles are the in-flight model weapons (missiles/rockets/bombs) the
 	// world steps each tick. They are render state derived deterministically
 	// from fire events, so they back the snapshot but stay out of the hash.
@@ -588,6 +595,11 @@ type Config struct {
 	// windgenerator income and projectile drift live.
 	MinWind int32
 	MaxWind int32
+
+	// MeteorWeather opens the active meteor impact windows (world.md §1.9). The
+	// strike-begin CRT dead-draw cadence runs on every world regardless, to
+	// keep the shared CRT stream aligned for lockstep.
+	MeteorWeather bool
 }
 
 // defaultGravity is the engine default projectile gravity on the sandbox's
@@ -643,6 +655,9 @@ func New(cfg Config) *World {
 		monarchDeath:  cfg.MonarchDeath,
 		wind:          windState{minWind: cfg.MinWind, maxWind: cfg.MaxWind},
 	}
+	// The meteor cadence runs on every map (the strike-begin dead draws keep
+	// the CRT stream aligned); MeteorWeather opens the active impact windows.
+	w.initMeteors(cfg.MeteorWeather)
 	// Every side is a human player (income multiplier 1.0) unless the config
 	// marks it as an AI at a difficulty.
 	for i := range w.aiMul {

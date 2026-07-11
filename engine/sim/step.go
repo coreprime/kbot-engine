@@ -175,10 +175,14 @@ func (w *World) Step(rt Runtime) {
 		// reads (economy.md §1.7).
 		w.stepMetalMakerToggle()
 	}
-	// The ambient wind re-roll runs last (the engines' phase 8, after the
-	// player-economy phase): a settle this tick has already read the wind the
-	// previous tick rolled, matching the phase order.
+	// The ambient world block runs last, in the engines' phase order (feature
+	// reproduction phase 6, wind phase 8, meteors phase 9), after the
+	// player-economy phase: a settle this tick has already read the wind the
+	// previous tick rolled. The three consume the deterministic RNG streams in
+	// this order, so lockstep draw accounting stays exact.
+	w.stepFeatureReproduction()
 	w.stepWind()
+	w.stepMeteors()
 }
 
 // stepBuildDecay rolls back every under-construction frame that no builder

@@ -128,6 +128,11 @@ func (w *World) SetTerrain(t *Terrain) {
 		return
 	}
 	w.terrain = t
+	// The reproduction scan cursor starts at the last cell and walks down to 0
+	// (world.md §1.5); it has meaning only with a cell field installed.
+	if t != nil {
+		w.reproIdx = t.W*t.H - 1
+	}
 	// Resize the per-side fog layers to the new map (or drop them when
 	// cleared): the LOS grid tracks the installed extent (sight.go).
 	w.ensureFogGrids()

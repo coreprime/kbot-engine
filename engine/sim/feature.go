@@ -103,6 +103,15 @@ type FeatureMeta struct {
 	// transitions to when it dies or is reclaimed one stage down the wreck
 	// heap chain (FBI featuredead). Empty = the cell simply empties.
 	FeatureDead string
+
+	// Reproduce is the per-scan spread chance (featuredef reproduce %, 0 = a
+	// feature that never spreads) and ReproduceArea the square radius in cells
+	// the offspring may land within (featuredef reproducearea). The ambient
+	// reproduce scan (world.md §1.5) draws these against the sim MINSTD stream
+	// — this is how forests slowly regrow into cleared ground. TA:K features do
+	// not reproduce, so both stay zero there.
+	Reproduce     int
+	ReproduceArea int
 }
 
 // Feature is one live placed feature (scenery, metal patch, wreck or sacred
@@ -419,6 +428,92 @@ func (w *World) creditFeatureReclaim(side int, meta *FeatureMeta) {
 	if meta.Energy > 0 {
 		w.creditEnergy(side, float32(meta.Energy))
 	}
+}
+
+// featureAnchoredAt returns the reproducible feature whose anchor cell is
+// exactly (cx, cz), or nil. Only a real, non-burning, reproducing feature
+// qualifies as a reproduction source.
+func (w *World) featureAnchoredAt(cx, cz int) *Feature {
+	for _, id := range w.featureOrder {
+		f := w.features[id]
+		if f == nil || f.Meta == nil || f.Meta.Reproduce <= 0 {
+			continue
+		}
+		if f.Cx == cx && f.Cz == cz {
+			return f
+		}
+	}
+	return nil
+}
+
+// cellHasFeature reports whether any feature occupies terrain cell (cx, cz) —
+// the emptiness test the reproduction placement gates on (a new sprite lands
+// only in a genuinely clear cell).
+func (w *World) cellHasFeature(cx, cz int) bool {
+	for _, id := range w.featureOrder {
+		f := w.features[id]
+		if f == nil {
+			continue
+		}
+		fx, fz := f.footprint()
+		if cx >= f.Cx && cx < f.Cx+fx && cz >= f.Cz && cz < f.Cz+fz {
+			return true
+		}
+	}
+	return false
+}
+
+// stepFeatureReproduction runs the ambient one-cell-per-tick reproduction scan
+// (world.md §1.5): the cursor examines a single map cell each tick, walking
+// W·H−1 down to 0 and wrapping. When the cell holds a reproducing feature
+// anchor it draws rand(100) against the feature's reproduce chance from the
+// shared MINSTD stream; on success it draws two more offsets and, if the target
+// cell is clear open ground, places a copy of the feature there — how forests
+// slowly regrow into cleared land. The engine's target-row divide uses the map
+// HEIGHT where a correct index/row split would use the width — a bug that only
+// shows on non-square maps, reproduced here so the scan matches cell-for-cell.
+func (w *World) stepFeatureReproduction() {
+	t := w.terrain
+	if t == nil || t.W <= 0 || t.H <= 0 {
+		return
+	}
+	idx := w.reproIdx
+	// Advance the cursor for next tick (wrap at the low end).
+	if w.reproIdx--; w.reproIdx < 0 {
+		w.reproIdx = t.W*t.H - 1
+	}
+	cx, cz := idx%t.W, idx/t.W
+	f := w.featureAnchoredAt(cx, cz)
+	if f == nil {
+		return
+	}
+	if w.rng.Bounded(100) >= int32(f.Meta.Reproduce) {
+		return
+	}
+	area := f.Meta.ReproduceArea
+	if area < 1 {
+		area = 1
+	}
+	colOff := int(w.rng.Bounded(int32(area))) - area/2
+	// The engine's row split divides the linear index by the map HEIGHT rather
+	// than the width (correct only when W == H); replicated verbatim.
+	rowOff := int(w.rng.Bounded(int32(area))) - area/2
+	targetCol := idx%t.W + colOff
+	targetRow := idx/t.H + rowOff
+	if targetCol < 0 || targetRow < 0 || targetCol >= t.W || targetRow >= t.H {
+		return
+	}
+	if w.cellHasFeature(targetCol, targetRow) {
+		return
+	}
+	// Place the offspring at the target cell centre, so its anchor lands on
+	// (targetCol, targetRow) for a 1×1 sprite.
+	cell := t.CellWU
+	at := fixed.Vec2{
+		X: cell.Mul(fixed.FromInt(targetCol)) + cell.Div(fixed.FromInt(2)),
+		Z: cell.Mul(fixed.FromInt(targetRow)) + cell.Div(fixed.FromInt(2)),
+	}
+	w.AddFeature(f.Meta.Name, f.Meta, f.Kind, at, f.Heading, f.Owner)
 }
 
 // featureToState builds one feature's render snapshot entry.

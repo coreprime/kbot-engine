@@ -74,6 +74,7 @@ type runState struct {
 	startPos    map[uint32]fixed.Vec3
 	rngStart    uint64
 	rngNow      uint64
+	crtStart    uint64
 	lastSnap    frame.Snapshot
 	seenUnits   map[uint32]bool
 }
@@ -229,6 +230,29 @@ func buildWorld(sc *Scenario, root string) (*runState, error) {
 	if t := makeTerrain(sc.Terrain); t != nil {
 		w.SetTerrain(t)
 	}
+	// Ambient map features (trees that reproduce, etc.) are placed after the
+	// terrain so their footprint cells anchor on the installed grid.
+	for _, f := range sc.Features {
+		if len(f.Pos) != 2 {
+			continue
+		}
+		fx, fz := f.FootprintX, f.FootprintZ
+		if fx <= 0 {
+			fx = 1
+		}
+		if fz <= 0 {
+			fz = 1
+		}
+		meta := &sim.FeatureMeta{
+			Name:          f.Name,
+			FootprintX:    fx,
+			FootprintZ:    fz,
+			Reproduce:     f.Reproduce,
+			ReproduceArea: f.ReproduceArea,
+		}
+		w.AddFeature(f.Name, meta, sim.FeatureProp,
+			fixed.Vec2{X: fixed.FromInt(f.Pos[0]), Z: fixed.FromInt(f.Pos[1])}, 0, -1)
+	}
 	st := &runState{
 		world:         w,
 		rt:            rt,
@@ -246,6 +270,7 @@ func buildWorld(sc *Scenario, root string) (*runState, error) {
 	// the rng_draws observable is meant to see them.
 	st.rngStart = w.RngDraws()
 	st.rngNow = st.rngStart
+	st.crtStart = w.CrtDraws()
 	for _, u := range sc.Units {
 		meta, binding, err := loadType(u.Type)
 		if err != nil {

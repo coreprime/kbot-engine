@@ -73,6 +73,12 @@ func (st *runState) sample(c CheckSpec) (int64, bool, string) {
 		// The normalized windgenerator strength (speed/5000, clamped 1),
 		// scaled ×1000 so an integer observable reads it to three decimals.
 		return st.world.WindStrengthMilli(), true, ""
+	case "world.features":
+		return int64(st.world.FeatureCount()), true, ""
+	case "world.crt_draws":
+		return int64(st.world.CrtDraws() - st.crtStart), true, ""
+	case "world.meteor_strikes":
+		return int64(st.world.MeteorStrikes()), true, ""
 	}
 	if c.Observable == "side.unit_count" {
 		if c.Side == nil {

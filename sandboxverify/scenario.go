@@ -59,10 +59,26 @@ type Scenario struct {
 	// "hard" ×1.0. A side absent from the map is a human player, never scaled.
 	AIDifficulty map[int]string `yaml:"ai_difficulty"`
 
-	Terrain *TerrainSpec `yaml:"terrain"`
-	Units   []UnitSpec   `yaml:"units"`
-	Actions []ActionSpec `yaml:"actions"`
-	Checks  []CheckSpec  `yaml:"checks"`
+	Terrain  *TerrainSpec  `yaml:"terrain"`
+	Units    []UnitSpec    `yaml:"units"`
+	Features []FeatureSpec `yaml:"features"`
+	Actions  []ActionSpec  `yaml:"actions"`
+	Checks   []CheckSpec   `yaml:"checks"`
+}
+
+// FeatureSpec places one map feature at scenario start with an inline
+// featuredef. Features are map objects (trees, rocks), not gamedata-loaded
+// units, so the fields that carry a sim consequence are declared directly here.
+type FeatureSpec struct {
+	Name string `yaml:"name"`
+	Pos  []int  `yaml:"pos"` // [x, z] world units (the footprint centre)
+	// Reproduce / ReproduceArea drive the ambient reproduction scan (world.md
+	// §1.5): reproduce % chance per scan, area the square cell radius offspring
+	// may land within.
+	Reproduce     int `yaml:"reproduce"`
+	ReproduceArea int `yaml:"reproduce_area"`
+	FootprintX    int `yaml:"footprint_x"`
+	FootprintZ    int `yaml:"footprint_z"`
 }
 
 // TerrainSpec builds a synthetic height field. Omitted = the flat unbounded

@@ -1,0 +1,77 @@
+# TA ambient world block: feature reproduction (trees regrow into cleared
+# ground) draws the shared MINSTD stream one cell per tick, and the meteor
+# strike-begin cadence burns its CRT dead draws on every map. This exercises the
+# whole world block's RNG accounting in one run.
+# Ground truth: world.md §1.5 (reproduction scan), §1.8 (wind re-roll interval),
+# §1.9 (meteor dead draws).
+name: ta-world-reproduction
+game: ta
+system: world
+spec: world.md §1.5, §1.8, §1.9
+description: >-
+  A single reproducing tree (reproduce=100, area=3) anchored on cell (4,4) of an
+  8x8 map. The reproduction cursor walks from cell 63 down; it reaches the tree's
+  cell (index 36) at frame 28, draws rand(100) then two offsets, and places an
+  offspring at (3,3). Meanwhile the meteor strike-begin fires once at game start,
+  burning four CRT dead draws alongside the wind re-roll's one interval draw.
+seed: 1
+duration: 40
+terrain:
+  width: 8
+  height: 8
+  cell_wu: 16
+features:
+  - name: tree
+    pos: [72, 72]   # cell (4, 4): 72/16 = 4 on each axis
+    reproduce: 100
+    reproduce_area: 3
+    footprint_x: 1
+    footprint_z: 1
+checks:
+  - at: 27
+    observable: world.features
+    expect: 1
+    label: only the original tree before its cell is scanned
+    derivation: |
+      The cursor starts at cell 63 and decrements one cell per tick, so the
+      tree's cell (index 4*8+4 = 36) is not scanned until frame 64-36 = 28.
+      Through frame 27 no reproduction has run: one feature.
+  - at: 30
+    observable: world.features
+    expect: 2
+    label: the tree reproduces into a cleared cell
+    derivation: |
+      At frame 28 the scan hits cell 36. rand(100) = 66 < 100 (reproduce), so
+      two offset draws follow: rand(3) = 0 -> colOff -1, rand(3) = 0 -> rowOff
+      -1. Target = (4-1, 4-1) = (3,3), in bounds and empty, so an offspring is
+      placed there. The new tree (cell 27) is not scanned again until frame 37,
+      so the count holds at 2 through frame 30.
+    missing_if_zero: true
+  - at: 30
+    observable: world.rng_draws
+    expect: 3
+    label: reproduction draws rand(100) plus two offsets
+    derivation: |
+      No units spawn and the wind is calm (its heading draw is skipped at speed
+      0), so the only MINSTD draws are the reproduction scan's: cells scanned
+      before frame 28 are empty (no draw); frame 28 draws rand(100) then the two
+      offsets = 3. The offspring is not re-scanned until frame 37. Total 3.
+    missing_if_zero: true
+  - at: 30
+    observable: world.meteor_strikes
+    expect: 1
+    label: one meteor strike-begin at game start
+    derivation: |
+      meteor_strike_begin fires once at game start (frame 1) and then every
+      warmup+duration = 1800+150 = 1950 ticks, so within a 40-frame run it runs
+      exactly once — even with no meteor weapon, for the CRT dead draws.
+  - at: 30
+    observable: world.crt_draws
+    expect: 5
+    label: CRT dead draws (meteor 4 + wind interval 1)
+    derivation: |
+      At frame 1 the wind re-roll draws its interval once from the CRT stream
+      and the meteor strike-begin burns four CRT draws. The next wind re-roll
+      and meteor strike are both far beyond frame 40, so the CRT stream has
+      advanced exactly 1 + 4 = 5.
+    missing_if_zero: true

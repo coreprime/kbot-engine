@@ -71,6 +71,7 @@ func (m *MinStd) Draws() uint64 { return m.draws }
 // separately from the MINSTD stream.
 type Crt struct {
 	state uint32
+	draws uint64
 }
 
 // NewCrt seeds the CRT stream directly (srand semantics — no transform).
@@ -79,8 +80,13 @@ func NewCrt(seed uint32) *Crt { return &Crt{state: seed} }
 // Next advances the LCG and returns the 15-bit draw in [0, 0x7FFF].
 func (c *Crt) Next() int32 {
 	c.state = c.state*0x343FD + 0x269EC3
+	c.draws++
 	return int32((c.state >> 16) & 0x7FFF)
 }
+
+// Draws reports how many advances this stream has made — the measurement aid a
+// harness samples to count meteor/wind CRT consumption.
+func (c *Crt) Draws() uint64 { return c.draws }
 
 // Snapshot returns the raw state word.
 func (c *Crt) Snapshot() uint32 { return c.state }
