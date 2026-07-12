@@ -185,6 +185,7 @@ export class Session {
   submitFire(unitId: number, slot: number, targetUnitId?: number, x?: number, z?: number): number
   submitStop(unitIds: number[]): number
   submitBuild(builderId: number, name: string, x: number, z: number, queued?: boolean, headingRad?: number): number
+  submitUnbuild(builderId: number, name: string, count?: number): number
   submitPatrol(unitIds: number[], x: number, z: number): number
   submitStance(unitIds: number[], moveMode: number, fireMode: number): number
   submitSelfDestruct(unitIds: number[]): number

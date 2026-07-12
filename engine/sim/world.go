@@ -2177,6 +2177,30 @@ func (w *World) ApplyOrder(o order.Order) {
 		if len(u.prodQueue) < maxOrderQueue {
 			u.prodQueue = append(u.prodQueue, o.Name)
 		}
+	case order.KindUnbuild:
+		// Cancel pending copies from a factory's production queue, newest
+		// first: repeat-clicking a queue cell peels off the run you most
+		// recently stacked. Only entries still waiting in the queue are
+		// touched — the copy already raising on the pad is tracked in
+		// buildState/buildeeID, not in prodQueue, so it finishes untouched
+		// (scrapping an in-progress frame is a reclaim, not a dequeue).
+		u := w.units[o.UnitID]
+		if u == nil || u.Dead || u.Meta == nil || o.Name == "" || o.Count <= 0 {
+			return
+		}
+		remaining := o.Count
+		q := u.prodQueue
+		for i := len(q) - 1; i >= 0 && remaining > 0; i-- {
+			if q[i] == o.Name {
+				q = append(q[:i], q[i+1:]...)
+				remaining--
+			}
+		}
+		if len(q) == 0 {
+			u.prodQueue = nil
+		} else {
+			u.prodQueue = q
+		}
 	}
 }
 

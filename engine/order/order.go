@@ -68,6 +68,12 @@ const (
 	// accumulator, so it lands in their pool at the next settle — subject to
 	// the storage clamp and, for an AI receiver, the difficulty multiplier.
 	KindShare
+	// Unbuild cancels pending copies of unit type Name from a factory's
+	// production queue (the right-click-on-a-queue-cell gesture): remove up to
+	// Count entries from the back of the queue (the most recently added run
+	// first). Not-yet-started entries only — a copy already raising on the pad
+	// is left to finish, since scrapping an in-progress frame is reclaim's job.
+	KindUnbuild
 )
 
 // Standing-order values carried by a Stance order.
@@ -113,6 +119,9 @@ type Order struct {
 
 	// Slot is the weapon slot (0..2) for Fire.
 	Slot int
+
+	// Count is how many queued production copies an Unbuild removes.
+	Count int
 
 	// Spawn parameters.
 	Name    string
@@ -167,6 +176,12 @@ func Build(builder uint32, name string, target fixed.Vec2, heading int32) Order 
 // orders (the shift-click site chain), the buildee facing heading.
 func BuildQueued(builder uint32, name string, target fixed.Vec2, heading int32) Order {
 	return Order{Kind: KindBuild, UnitID: builder, Name: name, Target: target, Heading: heading, Queued: true}
+}
+
+// Unbuild removes up to count pending copies of unit type name from a
+// factory's production queue, newest first (the right-click-to-cancel gesture).
+func Unbuild(builder uint32, name string, count int) Order {
+	return Order{Kind: KindUnbuild, UnitID: builder, Name: name, Count: count}
 }
 
 // Repair sends a mobile builder to an existing unit: an under-construction

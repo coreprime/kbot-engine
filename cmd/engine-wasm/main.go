@@ -54,6 +54,7 @@ func main() {
 		"submitFire":         js.FuncOf(submitFire),
 		"submitStop":         js.FuncOf(submitStop),
 		"submitBuild":        js.FuncOf(submitBuild),
+		"submitUnbuild":      js.FuncOf(submitUnbuild),
 		"canBuildAt":         js.FuncOf(queryCanBuildAt),
 		"submitPatrol":       js.FuncOf(submitPatrol),
 		"submitStance":       js.FuncOf(submitStance),
@@ -318,6 +319,21 @@ func submitBuild(_ js.Value, args []js.Value) any {
 		return int(inst.sess.Submit(order.BuildQueued(uint32(args[1].Int()), args[2].String(), target, heading)))
 	}
 	return int(inst.sess.Submit(order.Build(uint32(args[1].Int()), args[2].String(), target, heading)))
+}
+
+// submitUnbuild(handle, builderId, name, count) -> execTick. Cancels up to
+// count pending copies of unit type name from the factory's production queue,
+// newest first — the mirror of submitBuild for a queue-cell right-click.
+func submitUnbuild(_ js.Value, args []js.Value) any {
+	inst := instances[args[0].Int()]
+	if inst == nil {
+		return 0
+	}
+	count := 1
+	if len(args) > 3 {
+		count = args[3].Int()
+	}
+	return int(inst.sess.Submit(order.Unbuild(uint32(args[1].Int()), args[2].String(), count)))
 }
 
 // queryCanBuildAt(handle, name, x, z) -> bool. Read-only legality probe the

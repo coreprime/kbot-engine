@@ -136,6 +136,16 @@ export class Session {
     return this.#api.submitBuild(this.#handle, builderId, name, x, z, queued, headingRad)
   }
 
+  /**
+   * Cancel up to `count` pending copies of unit type `name` from a factory's
+   * production queue, newest first (the queue-cell right-click gesture). Only
+   * not-yet-started entries are removed; a copy already raising on the pad
+   * finishes untouched.
+   */
+  submitUnbuild(builderId, name, count = 1) {
+    return this.#api.submitUnbuild(this.#handle, builderId, name, count)
+  }
+
   submitPatrol(unitIds, x, z) {
     return this.#api.submitPatrol(this.#handle, unitIds, x, z)
   }
