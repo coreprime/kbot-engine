@@ -2160,6 +2160,20 @@ func (w *World) aimWeapon(u *Unit, s *weaponSlot, slot int, targetPos fixed.Vec2
 	// still tracked. A cadence refresh keeps the same bearing, so it must not
 	// re-gate fire — only an actual drift re-arms aimReady.
 	//
+	// The cadence refresh only fires once the current aim thread has FINISHED.
+	// StartAim supersedes the live instance by script name regardless of the
+	// COB's own signal mask, so refreshing while an aim is still running kills
+	// it mid-sequence. A long aim script — one that turns the torso, then plays
+	// a multi-second draw/open animation before returning (the artillery kbots)
+	// — takes longer than the cadence, so an unconditional refresh would abort
+	// and restart it every interval and it would never signal a settled aim,
+	// leaving a ballistic weapon that opens its barrels but never fires. The
+	// restore-after-delay thread the refresh guards against is itself only
+	// started at the END of the aim script, so there is nothing to counter
+	// until the aim has completed at least once. A brief "aim, return FALSE,
+	// call me again" script completes each pass promptly, so the cadence still
+	// re-offers it fresh angles.
+	//
 	// A command-fire weapon is exempt from the cadence refresh: it discharges
 	// once per explicit order, and its aim script latches the barrel pose in a
 	// COB static that only clears on the target-cleared handler (the commander's
@@ -2167,7 +2181,13 @@ func (w *World) aimWeapon(u *Unit, s *weaponSlot, slot int, targetPos fixed.Vec2
 	// restore-after-delay thread for the cadence to counter. Re-issuing the aim
 	// thread on the timer only re-runs that latch/aim script — re-playing the
 	// aim/fire pose while the shot sits gated — so keep it strictly drift-driven.
-	refreshDue := !u.Meta.Weapons[slot].CommandFire && w.simMs-s.aimLastIssueMs >= aimRefreshMs
+	aimSettled := true
+	if s.aimIssued {
+		if done, _ := ab.AimStatus(s.aimThread); !done {
+			aimSettled = false
+		}
+	}
+	refreshDue := aimSettled && !u.Meta.Weapons[slot].CommandFire && w.simMs-s.aimLastIssueMs >= aimRefreshMs
 	if drifted || refreshDue {
 		s.aimIssued = true
 		s.aimHeading = heading
