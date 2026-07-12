@@ -227,6 +227,13 @@ func (w *World) stepBuildDecay() {
 	for _, id := range collapsed {
 		if b := w.units[id]; b != nil {
 			b.Dead = true // for callers holding the pointer
+			// A collapsed frame vanishes cleanly — no wreck, no blast (the frame
+			// never reached 100%, so it leaves nothing behind). RemoveUnit drops it
+			// from every export, but its bare despawn carries no position; emit a
+			// positioned clean-removal event first (the same reason-5, no-wreck
+			// signal a reclaimed body raises) so the render layer tears the
+			// nanoframe down where it stood instead of stranding a 0% ghost.
+			w.emit(frame.Event{Kind: frame.EvDeath, UnitID: id, Anchor: b.Pos(), SfxType: deathReasonReclaimed})
 		}
 		w.RemoveUnit(id)
 	}
@@ -286,18 +293,21 @@ func (w *World) stepBuilder(u *Unit) {
 			w.startRaising(u)
 		}
 	case buildApproach:
-		dist := u.loco.Pos.DistTo(u.buildSite)
-		bd := u.Meta.BuildDistance
-		if bd <= 0 {
-			bd = fixed.FromInt(50)
+		// Resuming a build on an EXISTING structure (buildResumeID set) approaches
+		// a centre buried inside that structure's footprint: a big building fills
+		// its plot, so the builder stalls at the footprint edge — beyond
+		// BuildDistance of the centre — and a plain centre gate never trips,
+		// walking it into (or grinding against) the structure forever. Reaching to
+		// the resume target's footprint edge stops it at edge + BuildDistance, so
+		// it nanolathes from range and never walks into the building. A fresh build
+		// (buildResumeID 0) approaches empty ground and needs no reach.
+		var reach fixed.Fixed
+		if u.buildResumeID != 0 {
+			reach = unitFootReach(w.units[u.buildResumeID])
 		}
-		if dist > bd {
-			u.hasMove = true
-			u.moveTarget = u.buildSite
-			u.clearPath()
+		if !w.withinBuildRangeReach(u, u.buildSite, reach) {
 			return
 		}
-		u.hasMove = false
 		w.startRaising(u)
 	case buildRaising:
 		if !u.Meta.CanMove {

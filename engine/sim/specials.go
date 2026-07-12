@@ -324,19 +324,53 @@ func (w *World) stepSpecials(u *Unit) {
 	}
 }
 
-// withinBuildRange drives a builder toward target until it is inside its
-// BuildDistance and reports whether it has arrived. While still out of range it
-// sets a move toward the (live) target and returns false, so the caller's work
-// channel does no work this tick; once inside builddistance it halts the move
-// and returns true. A missing BuildDistance falls back to 50 wu. This is the
-// shared approach gate the repair, reclaim, and capture channels all run so a
-// builder must walk into range before nanolathing, salvaging, or capturing —
-// never acting across the map.
-func (w *World) withinBuildRange(u *Unit, target fixed.Vec2) bool {
+// footprintReach is the half-extent (world units) a builder cannot enter when
+// approaching a footprinted target: half the wider FBI side, squares of 16 wu
+// (so 8 wu per square). BuildDistance is measured from the target's centre, but
+// a large building/wreck fills its footprint, so the builder physically stalls
+// at the footprint EDGE — which can sit farther than BuildDistance from the
+// centre, leaving the plain centre gate never satisfied. Adding this reach to
+// BuildDistance lets the builder stop at edge + BuildDistance instead of trying
+// to reach the (often unreachable) centre. A footprint-less target reaches 0.
+func footprintReach(fx, fz int) fixed.Fixed {
+	f := fx
+	if fz > f {
+		f = fz
+	}
+	if f <= 0 {
+		return 0
+	}
+	return fixed.FromInt(f * 8)
+}
+
+// unitFootReach is footprintReach for a unit target, nil-safe (a target with no
+// meta reaches 0). The repair/reclaim/capture channels feed it their live
+// target so a builder stops at a large structure's edge, not its centre.
+func unitFootReach(t *Unit) fixed.Fixed {
+	if t == nil || t.Meta == nil {
+		return 0
+	}
+	return footprintReach(t.Meta.FootprintX, t.Meta.FootprintZ)
+}
+
+// withinBuildRangeReach drives a builder toward target until it is inside its
+// BuildDistance (plus a footprint reach) and reports whether it has arrived.
+// While still out of range it sets a move toward the (live) target and returns
+// false, so the caller's work channel does no work this tick; once inside range
+// it halts the move and returns true. A missing BuildDistance falls back to 50
+// wu. This is the shared approach gate the build-resume, repair, reclaim, and
+// capture channels all run so a builder must walk into range before
+// nanolathing, salvaging, or capturing — never acting across the map. The reach
+// is the target's footprint half-extent (footprintReach): a builder approaching
+// a footprinted target stops at the target's EDGE plus BuildDistance rather than
+// driving toward a centre buried inside — and inside its own footprint — which
+// it can never reach. reach 0 is the plain centre gate for a point site.
+func (w *World) withinBuildRangeReach(u *Unit, target fixed.Vec2, reach fixed.Fixed) bool {
 	bd := u.Meta.BuildDistance
 	if bd <= 0 {
 		bd = fixed.FromInt(50)
 	}
+	bd += reach
 	if u.loco.Pos.DistTo(target) > bd {
 		u.hasMove = true
 		u.moveTarget = target
@@ -368,7 +402,7 @@ func (w *World) stepRepair(u *Unit) {
 	// the build-resume path walks in before raising a frame. While still out of
 	// range the builder drives toward the (live) target position and heals
 	// nothing this tick; only once inside builddistance does the nanolathe bite.
-	if !w.withinBuildRange(u, t.loco.Pos) {
+	if !w.withinBuildRangeReach(u, t.loco.Pos, unitFootReach(t)) {
 		return
 	}
 	if w.econModel == EconomyTAK {
@@ -473,8 +507,13 @@ func (w *World) stepFeatureReclaim(u *Unit) {
 	// Approach: a reclaimer must be within build range to salvage, exactly as
 	// the repair path walks in before nanolathing. While still out of range it
 	// drives toward the feature and consumes nothing this tick; only once inside
-	// builddistance does the accumulator climb.
-	if !w.withinBuildRange(u, fixed.Vec2{X: f.Pos.X, Z: f.Pos.Z}) {
+	// builddistance does the accumulator climb. A large or blocking feature (a
+	// big wreck) fills its footprint, so the reclaimer stalls at the footprint
+	// edge — beyond BuildDistance of the centre — and the plain centre gate would
+	// never trip, stranding the order as a permanent walk. Reaching to the edge
+	// lets it stop at edge + BuildDistance and salvage.
+	fx, fz := f.footprint()
+	if !w.withinBuildRangeReach(u, fixed.Vec2{X: f.Pos.X, Z: f.Pos.Z}, footprintReach(fx, fz)) {
 		return
 	}
 	u.reclaimAccum++
@@ -525,7 +564,7 @@ func (w *World) stepCapture(u *Unit) {
 	// Approach: close to within build range before the capture channel advances,
 	// exactly as the repair and reclaim channels do — a capturer out of range
 	// makes no progress until it walks in.
-	if !w.withinBuildRange(u, t.loco.Pos) {
+	if !w.withinBuildRangeReach(u, t.loco.Pos, unitFootReach(t)) {
 		return
 	}
 	if w.tick%2 != 0 {
@@ -621,7 +660,7 @@ func (w *World) stepReclaim(u *Unit) {
 	}
 	// Approach: walk into build range before the salvage pulse bites, exactly as
 	// the repair channel does — a reclaimer out of range drains nothing.
-	if !w.withinBuildRange(u, t.loco.Pos) {
+	if !w.withinBuildRangeReach(u, t.loco.Pos, unitFootReach(t)) {
 		return
 	}
 	if w.tick%2 != 0 {
