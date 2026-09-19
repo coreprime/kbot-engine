@@ -1,5 +1,5 @@
-github.com/coreprime/kbot-io v0.1.1 h1:vhcVu4HpUoCnj1RG3Xb/ud824jT39WXE0/BlJUxJ48I=
-github.com/coreprime/kbot-io v0.1.1/go.mod h1:akD1EWqVOaCQFunG7VIVVvyy/wy8GQwWHSpUUd2iv6U=
+github.com/coreprime/kbot-io v0.3.0 h1:Wm8TAgXkByG8abTvGVgrS0DFhw2RMWd5vwlBFSUKMQo=
+github.com/coreprime/kbot-io v0.3.0/go.mod h1:e32w3hmjK9Pi9uL8L4f5trOL5e25UvOv0MZBrCD6HbM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=

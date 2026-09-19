@@ -37,8 +37,8 @@ func TestAirHorizontalVelocityMatch(t *testing.T) {
 	maxVel := m.MaxVelocity
 	accel := m.Accel
 
-	brake := step(fixed.Vec2{})                             // move: targetVel = 0
-	flythrough := step(fixed.Vec2{Z: maxVel})               // engage: own-run velocity
+	brake := step(fixed.Vec2{})               // move: targetVel = 0
+	flythrough := step(fixed.Vec2{Z: maxVel}) // engage: own-run velocity
 
 	// Decisive sign: matching the own fly-through velocity keeps more speed than
 	// the braking (zero-velocity) aim. A port that dropped the term, or matched

@@ -1430,12 +1430,12 @@ func startSetMaxReloadTime(meta *UnitMeta, binding Binding) {
 // caught mid-move keeps driving identically rather than freezing. Weapon
 // cooldowns are not carried, so combat state remains approximate.
 type RestoredUnit struct {
-	ID         uint32
-	Name       string
-	Side       int
-	Pos        fixed.Vec3
-	Heading    fixed.Fixed // raw fractional TA-angle
-	Speed      fixed.Fixed
+	ID      uint32
+	Name    string
+	Side    int
+	Pos     fixed.Vec3
+	Heading fixed.Fixed // raw fractional TA-angle
+	Speed   fixed.Fixed
 	// AirVel is an aircraft's live 3-D flight velocity. It diverges from the
 	// heading while banking, so a late joiner must resume it verbatim or its
 	// prediction re-flies from a standstill and desyncs the next tick.
