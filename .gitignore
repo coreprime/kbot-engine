@@ -3,3 +3,4 @@ wasm/engine.wasm
 wasm/wasm_exec.js
 pack-verify/
 *.tgz
+.cache/
